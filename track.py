@@ -16,7 +16,7 @@ def gray(image):
     return image[:, :, 1] 
 
 # Set frames. (Pick case)
-frames = gray(pims.open('../2D Particle Track/test_cases/crossover2/*.png'))
+frames = gray(pims.open('../ParticleTrack/test_cases/crossover2/*.png'))
 
 # Note down the size of the frames
 print(frames)
