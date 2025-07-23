@@ -19,7 +19,7 @@ def gray(image):
 frames = gray(pims.open('../ParticleTrack/test_cases/crossover2/*.png'))
 
 # Note down the size of the frames
-print(frames)
+#print(frames)
 # In this case, 5 frames, shape (445, 800, 4)
 
 
@@ -33,20 +33,23 @@ features = tp.locate(frames[0], diameter=11, invert = True) # set invert to true
 # Probably best to decide size experimentally and playing around with it. Better to overshoot
 
 # features is a pandas DataFrame
-print(features)
+#print(features)
 
 # Circle detected particles for a certain frame
 # tp.annotate(features, frames[0]) # annotate t1.png
 
 # In practice, we could further filter based on a threshold (max or min) of 
 
+# Turn off trackpy console log printing
+tp.quiet() 
+
 # Locating features for ALL frames/images
 f = tp.batch(frames, 11, invert = True, processes=1, minmass = 50) # By trialand error, found minmass 5000 to be a good number for 'noisy' dataset. Otherwise use 50
-print(f)
+#print(f)
 
 # Add z coord column with fixed z values
 f['z'] = 10 # arbitrary
-print(f)
+#print(f)
 
 
 # Link features into particle trajectories (no prediction)
@@ -63,15 +66,15 @@ traj_pred = pred.link_df(f, search_range = 50, memory = 5)
 # # in this case, we have a simple one particle example so not necessary
 
 # Check the number of particles were caught in the trajectory (should be 1 for example_photos_1)
-print("The number of particles detected: " + str(traj_pred['particle'].nunique()))
+#print("The number of particles detected: " + str(traj_pred['particle'].nunique()))
 
 # # Trace trajectories (2D)
 fig, ax = plt.subplots()
 
 # We have two trajectories to choose from, one without prediction (traj) or with dynamic prediction (traj_pred)
 tp.plot_traj(traj_pred, ax=ax, colorby='particle', superimpose = frames[0])
-ax.scatter(f['x'],f['y'])
-plt.show()
+#ax.scatter(f['x'],f['y'])
+#plt.show()
 
 # Note that current dataframe deals with 2D projections (not 3D lab frame)
 
@@ -80,10 +83,10 @@ plt.show()
 # To use, we need to use the incorporated z-coords for particles. In this case, use synthetic data.
 fig = plt.figure()
 ax = fig.add_subplot(projection = '3d')
-tp.plot_traj3d(traj_pred, ax=ax, pos_columns = ['x','y','z'], minmass = 50)
-ax.scatter(f['x'], f['y'], f['z'])
+#tp.plot_traj3d(traj_pred, ax=ax, pos_columns = ['x','y','z'], minmass = 50)
+#ax.scatter(f['x'], f['y'], f['z'])
 
-plt.show()
+#plt.show()
 
 coords = traj_pred[["x","y","z","frame","particle"]]
-print(coords)
+#print(coords)
