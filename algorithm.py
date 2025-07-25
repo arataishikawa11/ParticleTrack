@@ -23,7 +23,7 @@ z_p1 = coords.iloc[:3,2] # Grab all z coords in first frame
 
 # Initialize vector 
 b = np.zeros(2) # vector of known constant values (2 for one projection)
-b[0], b[1] = SDD*x_p1[0], SDD*z_p1[0]
+b[0], b[1] = SOD*x_p1[0], SOD*z_p1[0]
 print(b)
 
 # Initiliaze Matrix 
@@ -91,6 +91,7 @@ M[-2:, -3:] = block2(1) # Initial Block
 # vector of known constant values (2 for one projection)
 b = np.zeros(2+5*(projections-1))
 b[0], b[1] = SDD*x_p1[0], SDD*z_p1[0]
+
 print(b)
 
 for i in range(projections-1):
