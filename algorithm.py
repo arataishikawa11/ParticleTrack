@@ -80,6 +80,16 @@ block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1, 0, 0],
                    [0, 0, 1, 0, 0, -1]])
 print("block 3:\n" + tabulate(block1))
 
+
+# Define a function for extending our vector of constants (known values)
+def extend(frame):
+    x_pi = coords.iloc[frame-1:frame+2, 0].to_numpy()# Grab all x coords  Note: slicing rows frame-1: (frame+3)-1
+    z_pi = coords.iloc[frame-1:frame+2, 2].to_numpy() # Grab all z coords
+    return np.array([0,0,0, SOD*x_pi[num_p-1], SOD*z_pi[num_p-1]])
+
+
+print("vector of constants:\n" + str(extend(1)))
+
 # redundant reminder
 # starts with 2 rows and 9 cols
 rows = 2
@@ -89,9 +99,8 @@ M[-2:, -3:] = block2(1) # Initial Block
 
 # Initialize vector
 # vector of known constant values (2 for one projection)
-b = np.zeros(2+5*(projections-1))
-b[0], b[1] = SDD*x_p1[0], SDD*z_p1[0]
-
+b = np.zeros(2)
+b[0],b[1] = SOD*x_p1[num_p-1], SOD*z_p1[num_p-1] 
 print(b)
 
 for i in range(projections-1):
@@ -107,13 +116,17 @@ for i in range(projections-1):
     M = np.pad(M, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
     print("shape of M right now: " + str(M.shape))
 
+    # Insert blocks
     M[rows-new_rows:-2, :6] = block1
     M[-2:, -3:] = block2(i+2) # i+2 because we already built the first initial block 2
     M[rows-new_rows:-2, 6+i*3:] = block3
+    
+    # Extend our vector of constants
+    b = np.concatenate((b,extend(i+2))) # i+2 because we already initilized b for 1 projection
 
 
 print(tabulate(M))
-
+print(b)
 
 # Solve
 print(M.shape)
