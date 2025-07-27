@@ -19,7 +19,7 @@ theta = np.deg2rad(T*0.5) # radians per time step
 x_p1 = coords.iloc[:3,0] # Grab all x coords in first frame (frame 0)
 z_p1 = coords.iloc[:3,2] # Grab all z coords in first frame
 
-##### ONE PROJECTION BASE CASE #####
+##### ONE PROJECTION BASE CASE (w/ ONE PARTICLE) #####
 
 # Initialize vector 
 b = np.zeros(2) # vector of known constant values (2 for one projection)
