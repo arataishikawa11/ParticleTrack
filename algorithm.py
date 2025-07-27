@@ -52,10 +52,13 @@ print(result)
 
 # Now lets incorporate more projections. Note that we add 5 rows and 3 columns each time
 ##### MULTIPLE PROJECTIONS #####
+
+# Number of frames
 projections = 5
 assert projections >= 1
 
-num_p = 1 #add a forloop that loops over all particles later?
+# Number of particles
+num_p = 2
 
 # We note by pattern-matching that there are 3 blocks that occur every time
 # Yellow
@@ -65,14 +68,16 @@ block1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2
 print("block 1:\n" + tabulate(block1))
 
 # Green
-def block2(frame): # input is the projection number (int), output is the block for that projection
-    x_pi = coords.iloc[frame-1:frame+2, 0].to_numpy()# Grab all x coords  Note: slicing rows frame-1: (frame+3)-1
-    z_pi = coords.iloc[frame-1:frame+2, 2].to_numpy() # Grab all z coords
-    block = np.array([[SDD, -x_pi[num_p-1], 0],
-                       [0, -z_pi[num_p-1], SDD]])
+def block2(frame, p_id): # input is the projection number (int) and the particle id (int), output is the block for that projection
+    x_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 0].to_numpy()# Grab all x coords  Note: slicing rows frame-1: (frame+3)-1
+    z_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 2].to_numpy() # Grab all z coords
+
+    print(x_pi)
+    block = np.array([[SDD, -x_pi[p_id], 0],
+                       [0, -z_pi[p_id], SDD]])
 
     return block
-print("block2: \n" + str(block2(2)))
+print("block2: \n" + str(block2(2, 0)))
 
 # Blue
 block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1, 0, 0],
@@ -82,59 +87,72 @@ print("block 3:\n" + tabulate(block1))
 
 
 # Define a function for extending our vector of constants (known values)
-def extend(frame):
+def extend(frame, p_id): # input is the projection number (int) and the particle id (int), output is a vector of constants
     x_pi = coords.iloc[frame-1:frame+2, 0].to_numpy()# Grab all x coords  Note: slicing rows frame-1: (frame+3)-1
     z_pi = coords.iloc[frame-1:frame+2, 2].to_numpy() # Grab all z coords
-    return np.array([0,0,0, SOD*x_pi[num_p-1], SOD*z_pi[num_p-1]])
+    return np.array([0,0,0, SOD*x_pi[p_id], SOD*z_pi[p_id]])
 
 
-print("vector of constants:\n" + str(extend(1)))
+print("vector of constants:\n" + str(extend(1, 0))) # First particle has id p_id = 0
+
+
+# Algorithm
+
+# We will store our results in a list. Each entry will be a numpy array of unknowns with index corresponding to the particle id. (result[0] corresponds to particle_id = 0)
+result = []
 
 # redundant reminder
-# starts with 2 rows and 9 cols
-rows = 2
-cols = 9
-
-M[-2:, -3:] = block2(1) # Initial Block
-
-# Initialize vector
-# vector of known constant values (2 for one projection)
-b = np.zeros(2)
-b[0],b[1] = SOD*x_p1[num_p-1], SOD*z_p1[num_p-1] 
-print(b)
-
-for i in range(projections-1):
-    # add 5 rows and 3 cols each time
-    new_rows = 5
-    new_cols = 3
-
-    rows += new_rows
-    cols += new_cols
 
 
-    # Enlarge matrix by new_rows down, new_cols right. fill these w/ 0
-    M = np.pad(M, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
-    print("shape of M right now: " + str(M.shape))
+for p in range(num_p):
 
-    # Insert blocks
-    M[rows-new_rows:-2, :6] = block1
-    M[-2:, -3:] = block2(i+2) # i+2 because we already built the first initial block 2
-    M[rows-new_rows:-2, 6+i*3:] = block3
+    # starts with 2 rows and 9 cols every time
+    rows = 2
+    cols = 9
+
+    M = np.zeros((rows,cols)) # reset the matrix
+
+    M[-2:, -3:] = block2(1, p) # Initial Block for the pth particle
     
-    # Extend our vector of constants
-    b = np.concatenate((b,extend(i+2))) # i+2 because we already initilized b for 1 projection
+    # Initialize vector
+    # vector of known constant values (2 for one projection)
+    b = np.zeros(2)
+    b[0],b[1] = SOD*x_p1[p], SOD*z_p1[p] 
+    print(b)
 
-
-print(tabulate(M))
-print(b)
-
-# Solve
-print(M.shape)
-print(b.shape)
-# linalg.lstsq returns vector, residuals, rank, s
-result = np.linalg.lstsq(M, b.T, rcond=None)[0]
-print("For one particle:")
-print(result)
-
-
+    
+    for i in range(projections-1):
+        # add 5 rows and 3 cols each time
+        new_rows = 5
+        new_cols = 3
+    
+        rows += new_rows
+        cols += new_cols
+    
+    
+        # Enlarge matrix by new_rows down, new_cols right. fill these w/ 0
+        M = np.pad(M, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
+        print("shape of M right now: " + str(M.shape))
+    
+        # Insert blocks
+        M[rows-new_rows:-2, :6] = block1
+        M[-2:, -3:] = block2(i+2, p) # i+2 because we already built the first initial block 2
+        M[rows-new_rows:-2, 6+i*3:] = block3
+        
+        # Extend our vector of constants
+        b = np.concatenate((b,extend(i+2, p))) # i+2 because we already initilized b for 1 projection
+    
+    
+    print(tabulate(M))
+    print(b)
+    
+    # Solve
+    print(M.shape)
+    print(b.shape)
+    # linalg.lstsq returns vector, residuals, rank, s
+    result.append(np.linalg.lstsq(M, b.T, rcond=None)[0])
+    print("For particle_id: " + str(p))
+    print(result[p])
+    
+    
 ##### END #####
