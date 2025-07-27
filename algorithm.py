@@ -2,11 +2,18 @@ import numpy as np
 import pandas as pd
 import scipy as sp
 from tabulate import tabulate
-from track import coords # Import data from preprocessing
+#from track import coords # Import data from preprocessing
+from stationary import coords_stationary
 
 
 # Print out the DataFrame
-print(coords)
+#print(coords)
+
+# Stationary Case
+print(coords_stationary)
+coords = coords_stationary
+
+
 
 # Consider Particle 1 first
 
@@ -14,7 +21,7 @@ print(coords)
 SDD = 500 #mm source to detector
 SOD = 250 #mm source to object
 T = 0.1 # time step across frames (0.1 sec per one time step)
-theta = np.deg2rad(T*0.5) # radians per time step
+theta = np.deg2rad(T*0.5) # (delta) radians per time step
 
 x_p1 = coords.iloc[:3,0] # Grab all x coords in first frame (frame 0)
 z_p1 = coords.iloc[:3,2] # Grab all z coords in first frame
@@ -58,7 +65,7 @@ projections = 5
 assert projections >= 1
 
 # Number of particles
-num_p = 2
+num_p = 1
 
 # We note by pattern-matching that there are 3 blocks that occur every time
 # Yellow
@@ -69,7 +76,7 @@ print("block 1:\n" + tabulate(block1))
 
 # Green
 def block2(frame, p_id): # input is the projection number (int) and the particle id (int), output is the block for that projection
-    x_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 0].to_numpy()# Grab all x coords  Note: slicing rows frame-1: (frame+3)-1
+    x_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 0].to_numpy()# Grab all x coords  
     z_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 2].to_numpy() # Grab all z coords
 
     print(x_pi)
@@ -88,8 +95,8 @@ print("block 3:\n" + tabulate(block1))
 
 # Define a function for extending our vector of constants (known values)
 def extend(frame, p_id): # input is the projection number (int) and the particle id (int), output is a vector of constants
-    x_pi = coords.iloc[frame-1:frame+2, 0].to_numpy()# Grab all x coords  Note: slicing rows frame-1: (frame+3)-1
-    z_pi = coords.iloc[frame-1:frame+2, 2].to_numpy() # Grab all z coords
+    x_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 0].to_numpy()# Grab all x coords  
+    z_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 2].to_numpy() # Grab all z coords
     return np.array([0,0,0, SOD*x_pi[p_id], SOD*z_pi[p_id]])
 
 
@@ -136,11 +143,11 @@ for p in range(num_p):
     
         # Insert blocks
         M[rows-new_rows:-2, :6] = block1
-        M[-2:, -3:] = block2(i+2, p) # i+2 because we already built the first initial block 2
+        M[-2:, -3:] = block2(i+1, p) # i+1 because we already built the first initial block 2
         M[rows-new_rows:-2, 6+i*3:] = block3
         
         # Extend our vector of constants
-        b = np.concatenate((b,extend(i+2, p))) # i+2 because we already initilized b for 1 projection
+        b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
     
     
     print(tabulate(M))
