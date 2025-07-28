@@ -66,6 +66,7 @@ assert projections >= 1
 
 # Number of particles
 num_p = 1
+assert num_p >= 1
 
 # We note by pattern-matching that there are 3 blocks that occur every time
 # Yellow
@@ -76,15 +77,15 @@ print("block 1:\n" + tabulate(block1))
 
 # Green
 def block2(frame, p_id): # input is the projection number (int) and the particle id (int), output is the block for that projection
-    x_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 0].to_numpy()# Grab all x coords  
-    z_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 2].to_numpy() # Grab all z coords
+    x_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 0].to_numpy()# Grab all x coords in this frame
+    z_pi = coords.iloc[frame*num_p:(frame+1)*num_p, 2].to_numpy() # Grab all z coords in this frame
 
     print(x_pi)
     block = np.array([[SDD, -x_pi[p_id], 0],
                        [0, -z_pi[p_id], SDD]])
 
     return block
-print("block2: \n" + str(block2(2, 0)))
+print("block2: \n" + str(block2(0, 0)))
 
 # Blue
 block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1, 0, 0],
@@ -107,8 +108,6 @@ print("vector of constants:\n" + str(extend(1, 0))) # First particle has id p_id
 
 # We will store our results in a list. Each entry will be a numpy array of unknowns with index corresponding to the particle id. (result[0] corresponds to particle_id = 0)
 result = []
-
-# redundant reminder
 
 
 for p in range(num_p):
@@ -161,5 +160,5 @@ for p in range(num_p):
     print("For particle_id: " + str(p))
     print(result[p])
     
-    
+    print(np.round(result[p]))
 ##### END #####
