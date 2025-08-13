@@ -49,7 +49,7 @@ f = tp.batch(frames, 11, invert = True, processes=1, minmass = 50) # By trialand
 
 # Add z coord column with fixed z values
 f['z'] = 10 # arbitrary
-#print(f)
+print(f)
 
 
 # Link features into particle trajectories (no prediction)
