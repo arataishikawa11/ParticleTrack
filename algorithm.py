@@ -23,7 +23,7 @@ T = 0.1 # time step across frames (0.1 sec per one time step)
 theta = np.deg2rad(T*0.5) # (delta) radians per time step
 
 # Number of frames
-projections = 5
+projections = 10
 assert projections >= 1
 
 # Number of particles
@@ -93,7 +93,7 @@ for p in range(num_p):
     # Initialize vector
     # vector of known constant values (2 for one projection)
     b = np.zeros(2)
-    b[0], b[1] = SOD/SDD*x_p1[p], (SOD/SDD)*z_p1[p] 
+    b[0], b[1] = (SOD/SDD)*x_p1[p], (SOD/SDD)*z_p1[p] 
     print("b initial: \n" + str(b))
 
     
@@ -119,13 +119,21 @@ for p in range(num_p):
     
     
     print(tabulate(M))
-    print(b)
+    print("final b vector: \n" + str(b))
     
     # Solve
-    # linalg.lstsq returns vector, residuals, rank, s
-    result.append(np.linalg.lstsq(M, b.T, rcond=None)[0])
+    # linalg.lstsq returns vector, residuals, rank, s values
+    x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
+    result.append(x)
     print("For particle_id: " + str(p))
     print(result[p])
     
+
+
     print(np.round(result[p]))
+
+
+    # Calculate condition number
+    cond_num = np.linalg.cond(M)
+    print("Condition number: " + str(cond_num))
 ##### END ####

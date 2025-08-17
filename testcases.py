@@ -7,7 +7,7 @@ import pandas as pd
 # Stationary?
 const_vel = False
 const_acc = True
-pos = np.array([[10.0,0.0,0.0],
+pos = np.array([[10.0,10.0,0.0],
                 [0.0,0.0,0.0]]) #(x,y,z) in the global frame (mm)
 vel = np.array([[5.0,5.0,5.0],
                [0.0,0.0,0.0]]) # u=1, v=w=0 vector field (mm/s)
@@ -15,7 +15,7 @@ acc = np.array([[0.0,0.0,0.0],
                [0.0,0.0,0.0]]) # a_x = 1, a_y=a_z=0 acceleration (mm/s^2)
 
 # 5 projections needed to solve unknowns
-projections = 12
+projections = 10
 
 # Number of particles
 num_p = 2
@@ -69,6 +69,7 @@ for p in range(num_p):
         #print('x_p= %2.4f, z_p=%2.4f' %(x_p[i],z_p[i]))
         # Find next position
         x_rot = (pos[p][0] + vel[p][0]*T + 0.5*acc[p][0]*T**2)*np.cos(theta) - (pos[p][1] + vel[p][0]*T + 0.5*acc[p][1]*T**2)*np.sin(theta) #x_o
+        print("x_rot: %2.4f" %x_rot)
         y_rot = (pos[p][0] + vel[p][0]*T + 0.5*acc[p][0]*T**2)*np.sin(theta) + (pos[p][1] + vel[p][1]*T + 0.5*acc[p][1]*T**2)*np.cos(theta) #y_o
         z_rot = pos[p][2] + vel[p][2]*T + 0.5*acc[p][2]*T**2 #z_o
 
@@ -80,17 +81,11 @@ for p in range(num_p):
 # Create frames column
 frames = np.arange(projections)
 frames = np.tile(frames,num_p)
-print(frames)
-
-#particle = np.zeros(projections) # only one particle (particle id = 0)
-#print(particle)
 
 # Construct the DataFrame
 
 #For testing with trackpy, strip away particle id
 # Reformat into DataFrame with columns [y,x,frames] (2D)
-
-print(np.shape(x_p.flatten()))
 
 #data_array = np.array((x_p, z_p, frames, particle)).T
 data_array = np.array((x_p.flatten(), z_p.flatten(), frames)).T
