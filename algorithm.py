@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import scipy as sp
+from scipy.optimize import lsq_linear
 from tabulate import tabulate
 #from track import coords # Import data from preprocessing
 from trackpy_test import coords_test # Import data from preprocessing
@@ -19,11 +20,11 @@ coords = coords_test
 # Initialize Values
 SDD = 500 #mm source to detector
 SOD = 250 #mm source to object
-T = 0.1 # time step across frames (0.1 sec per one time step)
+T = 0.01 # time step across frames (0.1 sec per one time step)
 theta = np.deg2rad(T*0.5) # (delta) radians per time step
 
 # Number of frames
-projections = 10
+projections = 5
 assert projections >= 1
 
 # Number of particles
@@ -136,4 +137,41 @@ for p in range(num_p):
     # Calculate condition number
     cond_num = np.linalg.cond(M)
     print("Condition number: " + str(cond_num))
+
+    # Tikhonov regularization
+    # We will use the identity matrix as the regularization matrix
+
+    # Regularization parameter
+    lam = 1e-1
+
+    n_params = M.shape[1] # number of parameters (columns in M)
+    I = np.eye(n_params) # identity matrix of size n_params x n_params
+
+    M_aug = np.vstack((M, lam * I)) # Augment M with regularization
+    b_aug = np.concatenate((b, np.zeros(n_params))) # Augment b with zeros
+
+    # Solve the augmented system
+    x_reg, residuals_reg, rank_reg, svals_reg = np.linalg.lstsq(M_aug, b_aug, rcond=None)
+
+    result[p] = x_reg  # Update result with regularized solution
+
+    print(tabulate(M_aug))
+    print("Regularized solution for particle_id: " + str(p))
+    print(result[p])
+    print(np.round(result[p]))
+    print("Regularized condition number: " + str(np.linalg.cond(M_aug)))
+
+
+
+
+    # Implement bounds
+    upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
+    upper_bounds[:6] = np.inf  # No bounds for the first 6 parameters
+    lower_bounds = -3 * np.ones(n_params)  # Lower bounds for each parameter
+    lower_bounds[:6] = -np.inf  # No bounds for the first 6 parameters
+
+    res = lsq_linear(M, b, bounds=(lower_bounds, upper_bounds))  # Solve with bounds
+    print("Bounded solution for particle_id: " + str(p))
+    print(res.x)
+    print(np.round(res.x))
 ##### END ####

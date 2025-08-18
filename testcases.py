@@ -7,7 +7,7 @@ import pandas as pd
 # Stationary?
 const_vel = False
 const_acc = True
-pos = np.array([[10.0,10.0,0.0],
+pos = np.array([[1.0,1.0,1.0],
                 [0.0,0.0,0.0]]) #(x,y,z) in the global frame (mm)
 vel = np.array([[5.0,5.0,5.0],
                [0.0,0.0,0.0]]) # u=1, v=w=0 vector field (mm/s)
@@ -23,7 +23,7 @@ num_p = 2
 # Initialize Values
 SDD = 500 #mm source to detector
 SOD = 250 #mm source to object
-T = 0.1 # time step across frames (0.01 sec per one time step)
+T = 0.01 # time step across frames (0.01 sec per one time step)
 theta = np.deg2rad(T*0.5) # radians per time step (this is actually delta theta) [0.005 degrees per time step]
 
 # Initialize a numpy array that stores x coord in projection frame
