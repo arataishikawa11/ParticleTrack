@@ -3,35 +3,13 @@ import pandas as pd
 import scipy as sp
 from scipy.optimize import lsq_linear
 from tabulate import tabulate
-#from track import coords # Import data from preprocessing
+from testcases import pos,vel,acc # Import known initial positions and velocities for cross-referencing
 from trackpy_test import coords_test # Import data from preprocessing
-#from testcases import coords_test
+from initial_vals import * # Import initial values
 
-
-# Print out the DataFrame
-#print(coords)
-
-# Stationary Case
-# Caution with the naming of columns
-#print(coords_test)
-#print(coords_test2)
 coords = coords_test
 
-# Initialize Values
-SDD = 500 #mm source to detector
-SOD = 250 #mm source to object
-T = 0.01 # time step across frames (0.1 sec per one time step)
-theta = np.deg2rad(T*0.5) # (delta) radians per time step
-
-# Number of frames
-projections = 5
-assert projections >= 1
-
-# Number of particles
-num_p = 1
-assert num_p >= 1
-
-
+### BLOCKS ###
 
 # We note by pattern-matching that there are 3 blocks that occur every time
 # Yellow
@@ -61,6 +39,9 @@ print("block 3:\n" + tabulate(block3))
 
 
 
+
+
+
 # Define a function for extending our vector of constants (known values)
 def extend(frame, p_id): # input is the projection number (int) and the particle id (int), output is a vector of constants
 
@@ -73,7 +54,7 @@ def extend(frame, p_id): # input is the projection number (int) and the particle
 print("vector of constants:\n" + str(extend(1, 0))) # First particle has id p_id = 0
 
 
-# Algorithm
+### Algorithm ###
 
 # We will store our results in a list. Each entry will be a numpy array of unknowns with index corresponding to the particle id. (result[0] corresponds to particle_id = 0)
 result = []
@@ -95,7 +76,6 @@ for p in range(num_p):
     # vector of known constant values (2 for one projection)
     b = np.zeros(2)
     b[0], b[1] = (SOD/SDD)*x_p1[p], (SOD/SDD)*z_p1[p] 
-    print("b initial: \n" + str(b))
 
     
     for i in range(projections-1):
@@ -119,30 +99,34 @@ for p in range(num_p):
         b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
     
     
-    print(tabulate(M))
-    print("final b vector: \n" + str(b))
+    #print(tabulate(M))
+    #print("final b vector: \n" + str(b))
     
     # Solve
     # linalg.lstsq returns vector, residuals, rank, s values
     x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
     result.append(x)
-    print("For particle_id: " + str(p))
-    print(result[p])
+    # print("For particle_id: " + str(p))
+    # print(result[p])
     
 
 
-    print(np.round(result[p]))
+    # print(np.round(result[p]))
 
 
     # Calculate condition number
-    cond_num = np.linalg.cond(M)
-    print("Condition number: " + str(cond_num))
+    # cond_num = np.linalg.cond(M)
+    # print("Condition number: " + str(cond_num))
+
+
+
+
 
     # Tikhonov regularization
     # We will use the identity matrix as the regularization matrix
 
     # Regularization parameter
-    lam = 1e-1
+    lam = 1e-3
 
     n_params = M.shape[1] # number of parameters (columns in M)
     I = np.eye(n_params) # identity matrix of size n_params x n_params
@@ -155,14 +139,16 @@ for p in range(num_p):
 
     result[p] = x_reg  # Update result with regularized solution
 
-    print(tabulate(M_aug))
-    print("Regularized solution for particle_id: " + str(p))
-    print(result[p])
-    print(np.round(result[p]))
-    print("Regularized condition number: " + str(np.linalg.cond(M_aug)))
+    #print(tabulate(M_aug))
+    #print("Regularized solution for particle_id: " + str(p))
+    #print(result[p])
+    #print(np.round(result[p]))
+    #print("Regularized condition number: " + str(np.linalg.cond(M_aug)))
 
-
-
+    #print("Shape of M, non-regularized" + str(np.shape(M)))
+    #print("Shape of M, regularized" + str(np.shape(M_aug)))
+    #print("Shape of b, non-regularized" + str(np.shape(b)))
+    #print("Shape of b, regularized" + str(np.shape(b_aug)))
 
     # Implement bounds
     upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
@@ -171,7 +157,47 @@ for p in range(num_p):
     lower_bounds[:6] = -np.inf  # No bounds for the first 6 parameters
 
     res = lsq_linear(M, b, bounds=(lower_bounds, upper_bounds))  # Solve with bounds
-    print("Bounded solution for particle_id: " + str(p))
+    print("\n Bounded solution for particle_id " + str(p) + " with regularization:")
     print(res.x)
-    print(np.round(res.x))
+
+
+
+
+labels = ['u', 'v', 'w', 'a_x', 'a_y', 'a_z']
+for i in range(projections):
+    labels.append('x_' + str(i))
+    labels.append('y_' + str(i))
+    labels.append('z_' + str(i))
+
+df = pd.DataFrame(result, columns=labels)
+print("Final DataFrame of results: (each row corresponds to a particle)")
+print(df)
+
+# Cross reference results with known initial positions and velocities
+# Note that we only have access to initial positions and velocities, not accelerations
+print("\n Cross-referencing results with known initial positions and velocities:")
+comparison = pd.DataFrame({
+    'Known Position X': pos[:,0],
+    'Known Position Y': pos[:,1],
+    'Known Position Z': pos[:,2],
+    'Estimated Position X': df['x_0'],
+    'Estimated Position Y': df['y_0'],
+    'Estimated Position Z': df['z_0'],
+    'Known Velocity U': vel[:,0],
+    'Known Velocity V': vel[:,1],
+    'Known Velocity W': vel[:,2],
+    'Estimated Velocity U': df['u'],
+    'Estimated Velocity V': df['v'],
+    'Estimated Velocity W': df['w']
+})
+print(comparison[['Known Position X', 'Estimated Position X']])
+print(comparison[['Known Position Y', 'Estimated Position Y']])
+print(comparison[['Known Position Z', 'Estimated Position Z']])
+print(comparison[['Known Velocity U', 'Estimated Velocity U']])
+print(comparison[['Known Velocity V', 'Estimated Velocity V']])
+print(comparison[['Known Velocity W', 'Estimated Velocity W']])
+
+
+# Note that if results do not respect bounds, assume poor results
+
 ##### END ####

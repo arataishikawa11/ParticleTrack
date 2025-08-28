@@ -1,30 +1,29 @@
 import numpy as np
 import pandas as pd
+from initial_vals import *
 
 # Goal: Create a pandas dataframe that holds projection coordinates such that in the global frame, it satisfies stationary case
 # Start with one particle case
 
-# Stationary?
-const_vel = False
-const_acc = True
-pos = np.array([[1.0,1.0,1.0],
+
+# Initial values
+pos = np.array([[0.5,0.5,0.5],
                 [0.0,0.0,0.0]]) #(x,y,z) in the global frame (mm)
-vel = np.array([[5.0,5.0,5.0],
+vel = np.array([[1.0,1.0,1.0],
                [0.0,0.0,0.0]]) # u=1, v=w=0 vector field (mm/s)
 acc = np.array([[0.0,0.0,0.0],
                [0.0,0.0,0.0]]) # a_x = 1, a_y=a_z=0 acceleration (mm/s^2)
 
-# 5 projections needed to solve unknowns
-projections = 10
 
-# Number of particles
-num_p = 2
+# Generalize to multiple particles with random initial positions/velocities/accelerations
+# Set seed
+np.random.seed(11)
 
-# Initialize Values
-SDD = 500 #mm source to detector
-SOD = 250 #mm source to object
-T = 0.01 # time step across frames (0.01 sec per one time step)
-theta = np.deg2rad(T*0.5) # radians per time step (this is actually delta theta) [0.005 degrees per time step]
+pos = np.random.uniform(-3, 3, (num_p,3))
+vel = np.random.uniform(-2, 2, (num_p,3))
+acc = np.random.uniform(-1, 1, (num_p,3))
+
+
 
 # Initialize a numpy array that stores x coord in projection frame
 # Note that y coord in projection frame does not exist
@@ -69,12 +68,12 @@ for p in range(num_p):
         #print('x_p= %2.4f, z_p=%2.4f' %(x_p[i],z_p[i]))
         # Find next position
         x_rot = (pos[p][0] + vel[p][0]*T + 0.5*acc[p][0]*T**2)*np.cos(theta) - (pos[p][1] + vel[p][0]*T + 0.5*acc[p][1]*T**2)*np.sin(theta) #x_o
-        print("x_rot: %2.4f" %x_rot)
         y_rot = (pos[p][0] + vel[p][0]*T + 0.5*acc[p][0]*T**2)*np.sin(theta) + (pos[p][1] + vel[p][1]*T + 0.5*acc[p][1]*T**2)*np.cos(theta) #y_o
         z_rot = pos[p][2] + vel[p][2]*T + 0.5*acc[p][2]*T**2 #z_o
 
         # Update current position
         pos[p][0], pos[p][1], pos[p][2] = x_rot, y_rot, z_rot
+        print('x= %2.4f, y=%2.4f, z=%2.4f' %(pos[p][0], pos[p][1], pos[p][2]))
 
 # Convert to pandas DataFrame
 
@@ -93,3 +92,9 @@ data_array = np.array((x_p.flatten(), z_p.flatten(), frames)).T
 #coords_test = pd.DataFrame(data_array, columns = ['x','z','frame','particle'])
 coords_test = pd.DataFrame(data_array, columns = ['x','z','frame'])
 print(coords_test)
+
+
+
+
+
+
