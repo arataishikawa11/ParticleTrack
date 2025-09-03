@@ -19,10 +19,11 @@ acc = np.array([[0.0,0.0,0.0],
 # Set seed
 np.random.seed(11)
 
-pos = np.random.uniform(-3, 3, (num_p,3))
-vel = np.random.uniform(-2, 2, (num_p,3))
-acc = np.random.uniform(-1, 1, (num_p,3))
-
+pos = np.random.uniform(-1, 1, (num_p,3))
+#vel = np.random.uniform(-1, 1, (num_p,3))
+#acc = np.random.uniform(-0.5, 0.5, (num_p,3))
+vel = np.zeros((num_p,3))
+acc = np.zeros((num_p,3))
 
 
 # Initialize a numpy array that stores x coord in projection frame
@@ -56,6 +57,8 @@ acc = np.random.uniform(-1, 1, (num_p,3))
 x_p = np.zeros((num_p,projections))
 z_p = np.zeros((num_p,projections))
 
+flags = np.zeros((num_p,projections)) # 1 if detected, 0 if not detected
+
 for p in range(num_p):
     for i in range(projections):
 
@@ -74,6 +77,9 @@ for p in range(num_p):
         # Update current position
         pos[p][0], pos[p][1], pos[p][2] = x_rot, y_rot, z_rot
         print('x= %2.4f, y=%2.4f, z=%2.4f' %(pos[p][0], pos[p][1], pos[p][2]))
+
+        if np.abs(pos[p][0]) > 3 or np.abs(pos[p][1]) > 3 or np.abs(pos[p][2]) > 3:
+            flags[p][i] = 1
 
 # Convert to pandas DataFrame
 

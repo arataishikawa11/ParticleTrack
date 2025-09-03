@@ -14,7 +14,7 @@ coords = coords_test
 # Link particle trajectories from coords dataframe with prediction enabled
 # Beware of column names 
 pred = tp.predict.NearestVelocityPredict()
-traj_pred = pred.link_df(coords, search_range = 50, pos_columns = ['x','z'], memory = 5)
+traj_pred = pred.link_df(coords, search_range = 10, pos_columns = ['x','z'], memory = 5)
 
 
 # # Trace trajectories (2D)

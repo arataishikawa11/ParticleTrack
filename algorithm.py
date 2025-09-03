@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 import scipy as sp
-from scipy.optimize import lsq_linear
+from scipy.optimize import lsq_linear, least_squares
 from tabulate import tabulate
-from testcases import pos,vel,acc # Import known initial positions and velocities for cross-referencing
+from testcases import pos,vel,acc,flags # Import known initial positions and velocities for cross-referencing
 from trackpy_test import coords_test # Import data from preprocessing
 from initial_vals import * # Import initial values
 
@@ -99,9 +99,22 @@ for p in range(num_p):
         b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
     
     
-    #print(tabulate(M))
+
+
+    # Implemening one validation check
+    validation = np.zeros(cols)
+    validation[7] = 1.0
+    validation[1] = (projections-1)*T
+    validation[4] = 0.5*(projections-1)*T**2
+    validation[-2] = -1.0
+
+    #b = np.append(b, 0) # Append a 0 to b
+    #M = np.vstack((M, validation)) # Append the validation row to M
+    M=M*10e2
+    b=b*10e2
+    print(tabulate(M))
     #print("final b vector: \n" + str(b))
-    
+
     # Solve
     # linalg.lstsq returns vector, residuals, rank, s values
     x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
@@ -115,18 +128,15 @@ for p in range(num_p):
 
 
     # Calculate condition number
-    # cond_num = np.linalg.cond(M)
-    # print("Condition number: " + str(cond_num))
-
-
-
+    cond_num = np.linalg.cond(M)
+    print("Condition number (before): " + str(cond_num))
 
 
     # Tikhonov regularization
     # We will use the identity matrix as the regularization matrix
 
     # Regularization parameter
-    lam = 1e-3
+    lam = 1e-2
 
     n_params = M.shape[1] # number of parameters (columns in M)
     I = np.eye(n_params) # identity matrix of size n_params x n_params
@@ -152,14 +162,23 @@ for p in range(num_p):
 
     # Implement bounds
     upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
+    #upper_bounds = np.inf * np.ones(n_params) # Upper bounds for each parameter
     upper_bounds[:6] = np.inf  # No bounds for the first 6 parameters
-    lower_bounds = -3 * np.ones(n_params)  # Lower bounds for each parameter
+    lower_bounds = -3 * np.ones(n_params) # Lower bounds for each parameter
+    #lower_bounds = -np.inf * np.ones(n_params)  # Upper bounds for each parameter
     lower_bounds[:6] = -np.inf  # No bounds for the first 6 parameters
+    print(type(lower_bounds))
+    print(type(upper_bounds))
+    print("Lower bounds: " + str(lower_bounds))
+    print("Upper bounds: " + str(upper_bounds))
 
-    res = lsq_linear(M, b, bounds=(lower_bounds, upper_bounds))  # Solve with bounds
+    res = lsq_linear(M_aug, b_aug, verbose = 2)  # Solve with bounds
     print("\n Bounded solution for particle_id " + str(p) + " with regularization:")
     print(res.x)
 
+    # Calculate condition number
+    cond_num = np.linalg.cond(M_aug)
+    print("Condition number (after): " + str(cond_num))
 
 
 
@@ -180,24 +199,47 @@ comparison = pd.DataFrame({
     'Known Position X': pos[:,0],
     'Known Position Y': pos[:,1],
     'Known Position Z': pos[:,2],
-    'Estimated Position X': df['x_0'],
-    'Estimated Position Y': df['y_0'],
-    'Estimated Position Z': df['z_0'],
+    'Estimated Position X': df['x_' + str(projections-1)],
+    'Estimated Position Y': df['y_' + str(projections-1)],
+    'Estimated Position Z': df['z_' + str(projections-1)],
+    'Error in Position X': pos[:,0] - df['x_'+str(projections-1)],
+    'Error in Position Y': pos[:,1] - df['y_'+str(projections-1)],
+    'Error in Position Z': pos[:,2] - df['z_'+str(projections-1)],
     'Known Velocity U': vel[:,0],
     'Known Velocity V': vel[:,1],
     'Known Velocity W': vel[:,2],
     'Estimated Velocity U': df['u'],
     'Estimated Velocity V': df['v'],
-    'Estimated Velocity W': df['w']
+    'Estimated Velocity W': df['w'],
+    'Error in Velocity U': vel[:,0] - df['u'],
+    'Error in Velocity V': vel[:,1] - df['v'],
+    'Error in Velocity W': vel[:,2] - df['w'],
+    'Known Acceleration a_x': acc[:,0],
+    'Known Acceleration a_y': acc[:,1],
+    'Known Acceleration a_z': acc[:,2],
+    'Estimated Acceleration a_x': df['a_x'],
+    'Estimated Acceleration a_y': df['a_y'],
+    'Estimated Acceleration a_z': df['a_z'],
+    'Error in Acceleration X': acc[:,0] - df['a_x'],
+    'Error in Acceleration Y': acc[:,1] - df['a_y'],
+    'Error in Acceleration Z': acc[:,2] - df['a_z']
 })
-print(comparison[['Known Position X', 'Estimated Position X']])
-print(comparison[['Known Position Y', 'Estimated Position Y']])
-print(comparison[['Known Position Z', 'Estimated Position Z']])
-print(comparison[['Known Velocity U', 'Estimated Velocity U']])
-print(comparison[['Known Velocity V', 'Estimated Velocity V']])
-print(comparison[['Known Velocity W', 'Estimated Velocity W']])
 
+print(comparison[['Known Position X', 'Estimated Position X', 'Error in Position X']])
+print(comparison[['Known Position Y', 'Estimated Position Y', 'Error in Position Y']])
+print(comparison[['Known Position Z', 'Estimated Position Z', 'Error in Position Z']])
+print(comparison[['Known Velocity U', 'Estimated Velocity U', 'Error in Velocity U']])
+print(comparison[['Known Velocity V', 'Estimated Velocity V', 'Error in Velocity V']])
+print(comparison[['Known Velocity W', 'Estimated Velocity W', 'Error in Velocity W']])
+print(comparison[['Known Acceleration a_x', 'Estimated Acceleration a_x']])
+print(comparison[['Known Acceleration a_y', 'Estimated Acceleration a_y']])
+print(comparison[['Known Acceleration a_z', 'Estimated Acceleration a_z']])
 
 # Note that if results do not respect bounds, assume poor results
 
+print(df["y_" + str(projections-1)])
+
+print(flags)
 ##### END ####
+
+
