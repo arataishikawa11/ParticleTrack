@@ -38,18 +38,7 @@ block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
 print("block 3:\n" + tabulate(block3))
 
 
-### BLOCKS FOR C MATRIX (ROTATION CONTRIBUTION ONLY) ###
 
-# Yellow
-cblock1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2, -0.5*np.sin(theta)*T**2, 0],
-                  [T*np.sin(theta), T*np.cos(theta), 0, 0.5*np.sin(theta)*T**2, 0.5*np.cos(theta)*T**2, 0]])
-
-
-# Blue
-cblock3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
-                   [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0]])
-
-### END ###
 
 
 
@@ -81,19 +70,13 @@ for p in range(num_p):
 
     M = np.zeros((rows,cols)) # reset the matrix
 
-    M[-2:, -3:] = block2(0, p) # Initial Block for the pth particle
-
-
-    C = np.zeros((rows,cols)) # reset the rotation contribution matrix
-
+     # Initial Block for the pth particle
+    M[:,0:3] = block2(0,p)
     
     # Initialize vector
     # vector of known constant values (2 for one projection)
     b = np.zeros(2)
     b[0], b[1] = (SOD/SDD)*x_p1[p], (SOD/SDD)*z_p1[p] 
-
-    # Initialize d vector (for rotation contribution only)
-    d = np.zeros(2)
 
     
     for i in range(projections-1):
@@ -107,77 +90,67 @@ for p in range(num_p):
     
         # Enlarge matrix by new_rows down, new_cols right. fill these w/ 0
         M = np.pad(M, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
-
+    
         # Insert blocks
-        M[rows-new_rows:-2, :6] = block1
-        M[-2:, -3:] = block2(i+1, p) # i+1 because we already built the first initial block 2
-        M[rows-new_rows:-2, 6+i*3:] = block3
+        M[-2:, -9:-6] = block2(i+1, p) # i+1 because we already built the first initial block 2
+        M[-5:-2, -12:-6] = block3
         
         # Extend our vector of constants
         b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
-
-        # Rotation contribution matrix
-        C = np.pad(C, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
-
-        # Insert blocks (No green block contribution)
-        C[rows-new_rows:-3, :6] = cblock1
-        C[rows-new_rows:-3, 6+i*3:] = cblock3
-        
-        # Extend our vector of constants
-        d = np.concatenate((d, np.zeros(5))) # i+1 because we already initilized b for 1 projection
     
-    
+    for i in range(projections-1):
+        #M[2*i+2:2*i+5, -6:] = block1
+        M[5*i+2:5*i+5, -6:] = block1
 
 
-    # Implementing one validation check
-    validation = np.zeros(cols)
-    validation[7] = 1.0
-    validation[1] = (projections-1)*T
-    validation[4] = 0.5*(projections-1)*T**2
-    validation[-2] = -1.0
-
-    #b = np.append(b, 0) # Append a 0 to b
-    #M = np.vstack((M, validation)) # Append the validation row to M
-    #M=M*10e2
-    #b=b*10e2
-    #print("final b vector: \n" + str(b))
-
-    # Solve
-    # linalg.lstsq returns vector, residuals, rank, s values
-    #x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
-    #result.append(x)
-    # print("For particle_id: " + str(p))
-    # print(result[p])
-    
-    # Implement Kalman Filter
-
-
-
-    # print(np.round(result[p]))
-
-
-    # Calculate condition number
-    #cond_num = np.linalg.cond(M)
-    #print("Condition number (before): " + str(cond_num))
-
-
-    # Tikhonov regularization
-    # We will use the identity matrix as the regularization matrix
-
-    # Regularization parameter
-    #lam = 1e-2
-
-    #n_params = M.shape[1] # number of parameters (columns in M)
-    #I = np.eye(n_params) # identity matrix of size n_params x n_params
-
-    #M_aug = np.vstack((M, lam * I)) # Augment M with regularization
-    #b_aug = np.concatenate((b, np.zeros(n_params))) # Augment b with zeros
-
-    ## Solve the augmented system
-    #x_reg, residuals_reg, rank_reg, svals_reg = np.linalg.lstsq(M_aug, b_aug, rcond=None)
-
-    #result[p] = x_reg  # Update result with regularized solution
-
+#    # Implemening one validation check
+#    validation = np.zeros(cols)
+#    validation[7] = 1.0
+#    validation[1] = (projections-1)*T
+#    validation[4] = 0.5*(projections-1)*T**2
+#    validation[-2] = -1.0
+#
+#    #b = np.append(b, 0) # Append a 0 to b
+#    #M = np.vstack((M, validation)) # Append the validation row to M
+#    M=M*10e2
+#    b=b*10e2
+#    print(tabulate(M))
+#    #print("final b vector: \n" + str(b))
+#
+#    # Solve
+#    # linalg.lstsq returns vector, residuals, rank, s values
+#    x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
+#    result.append(x)
+#    # print("For particle_id: " + str(p))
+#    # print(result[p])
+#    
+#
+#
+#    # print(np.round(result[p]))
+#
+#
+#    # Calculate condition number
+    cond_num = np.linalg.cond(M)
+    print("Condition number (before): " + str(cond_num))
+#
+#
+#    # Tikhonov regularization
+#    # We will use the identity matrix as the regularization matrix
+#
+#    # Regularization parameter
+#    lam = 1e-2
+#
+    n_params = M.shape[1] # number of parameters (columns in M)
+#    I = np.eye(n_params) # identity matrix of size n_params x n_params
+#
+#    M_aug = np.vstack((M, lam * I)) # Augment M with regularization
+#    b_aug = np.concatenate((b, np.zeros(n_params))) # Augment b with zeros
+#
+#    # Solve the augmented system
+#    x_reg, residuals_reg, rank_reg, svals_reg = np.linalg.lstsq(M_aug, b_aug, rcond=None)
+#
+#    result[p] = x_reg  # Update result with regularized solution
+#
     #print(tabulate(M_aug))
     #print("Regularized solution for particle_id: " + str(p))
     #print(result[p])
@@ -188,84 +161,38 @@ for p in range(num_p):
     #print("Shape of M, regularized" + str(np.shape(M_aug)))
     #print("Shape of b, non-regularized" + str(np.shape(b)))
     #print("Shape of b, regularized" + str(np.shape(b_aug)))
-    #print(tabulate(M))
 
-    ## Implement bounds
-    #upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
-    ##upper_bounds = np.inf * np.ones(n_params) # Upper bounds for each parameter
-    #upper_bounds[:6] = np.inf  # No bounds for the first 6 parameters
-    #lower_bounds = -3 * np.ones(n_params) # Lower bounds for each parameter
-    ##lower_bounds = -np.inf * np.ones(n_params)  # Upper bounds for each parameter
-    #lower_bounds[:6] = -np.inf  # No bounds for the first 6 parameters
-    #print(type(lower_bounds))
-    #print(type(upper_bounds))
-    #print("Lower bounds: " + str(lower_bounds))
-    #print("Upper bounds: " + str(upper_bounds))
+    # Implement bounds
+    upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
+    #upper_bounds = np.inf * np.ones(n_params) # Upper bounds for each parameter
+    upper_bounds[-6:] = np.inf  # No bounds for the first 6 parameters
+    lower_bounds = -3 * np.ones(n_params) # Lower bounds for each parameter
+    #lower_bounds = -np.inf * np.ones(n_params)  # Upper bounds for each parameter
+    lower_bounds[-6:] = -np.inf  # No bounds for the first 6 parameters
+    print(type(lower_bounds))
+    print(type(upper_bounds))
+    print("Lower bounds: " + str(lower_bounds))
+    print("Upper bounds: " + str(upper_bounds))
 
-    #res = lsq_linear(M, b, verbose = 2)  # Solve with bounds
-    #print("\n Bounded solution for particle_id " + str(p) + " with regularization:")
-    #result.append(res.x)
-    ## Calculate condition number
-    #cond_num = np.linalg.cond(M)
-    #print("Condition number (after): " + str(cond_num))
+    res = lsq_linear(M, b)  # Solve with bounds
+    print("\n Bounded solution for particle_id " + str(p) + " with regularization:")
+    print(res.x)
+    result.append(res.x)
 
-    print(tabulate(C))
-    print(tabulate(M))
-
-    # Non-linear least_squares
-    def func(x, A, C, b, d, S=np.eye(rows)):
-        residuals = np.linalg.norm((A @ x - b) + S @ (C @ x - d))
-        return residuals
-
-    x0 = np.zeros(cols) # Initial guess
-    #y0 = np.zeros(cols) # Initial guess for rotation contribution
-    
-    # Create scaling matrix
-   # diag = np.ones(rows)
-   # for i in range(projections+1):
-   #     diag[-1 -i*3]=100.0 #z
-   #     diag[-2 -i*3]=1.0 #y
-   #     diag[-3 -i*3]=1.0 #x
-   # S = np.diag(diag)
+    # Calculate condition number
+    cond_num = np.linalg.cond(M)
+    print("Condition number (after): " + str(cond_num))
 
 
-
-    res_lsq = least_squares(func, x0, args=(M, C, b, d))
-    print("Non-linear least squares solution:")
-    #print(res_lsq.x)
-
-
-    #result.append(res_lsq.x)
-
-
-    # SVD
-    U, s, Vt = np.linalg.svd(M, full_matrices=False)
-    print("s before inverse:" + str(s))
-    s = 1/s
-    Sigma = np.diag(s)
-    print(U)
-    print("Shape U: " + str(np.shape(U)))
-    print(Sigma)
-    print("Shape Sigma: " + str(np.shape(Sigma)))
-    print(s)
-    print("Shape s: " + str(np.shape(s)))
-    print(Vt)
-    print("Shape Vt: " + str(np.shape(Vt)))
-
-    A_plus = Vt.T @ Sigma @ U.T
-
-    x_svd = A_plus @ b
-    print("SVD solution:")
-    print(x_svd)
-    result.append(x_svd)
-
-
-
+print(tabulate(M))
+print(b)
 labels = ['u', 'v', 'w', 'a_x', 'a_y', 'a_z']
+list = []
 for i in range(projections):
-    labels.append('x_' + str(i))
-    labels.append('y_' + str(i))
-    labels.append('z_' + str(i))
+    list.append('x_' + str(i))
+    list.append('y_' + str(i))
+    list.append('z_' + str(i))
+labels = list + labels
 
 df = pd.DataFrame(result, columns=labels)
 print("Final DataFrame of results: (each row corresponds to a particle)")
@@ -319,9 +246,5 @@ print(comparison[['Known Acceleration a_z', 'Estimated Acceleration a_z']])
 print(df["y_" + str(projections-1)])
 
 print(flags)
-
-
-
 ##### END ####
-
 
