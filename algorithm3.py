@@ -9,75 +9,11 @@ from initial_vals import * # Import initial values
 
 coords = coords_test
 
-### LILLYS ADDED BLOCKS :) ###
-#  rotation about z
-def Rz(phi):
-    c, s = np.cos(phi), np.sin(phi)
-    return np.array([[c, -s, 0.0],
-                     [s,  c, 0.0],
-                     [0.0, 0.0, 1.0]], dtype=float)
-#  build from one measurement
-def camera_ray_world(xp, zp, k, theta, SOD, SDD):
-    Rk = Rz(k*theta)
-    c_world = Rk @ np.array([0.0, +SOD, 0.0])              # source position in world
-    d_cam   = np.array([xp, -SDD, zp], dtype=float)        # ray through detector pixel
-    d_cam  /= np.linalg.norm(d_cam) + 1e-15
-    d_world = Rk @ d_cam
-    d_world /= np.linalg.norm(d_world) + 1e-15
-    return c_world, d_world
-# closest midpoint between two rays
-def closest_point_between_rays(c1, d1, c2, d2):
-    r = c1 - c2
-    a = 1.0
-    b = float(d1 @ d2)
-    c = 1.0
-    d = float(d1 @ r)
-    e = float(d2 @ r)
-    denom = a*c - b*b
-    if abs(denom) < 1e-12:
-        t = -d
-        s = 0.0
-    else:
-        t = (b*e - c*d) / denom
-        s = (a*e - b*d) / denom
-    p1 = c1 + t*d1
-    p2 = c2 + s*d2
-    return 0.5*(p1 + p2)
-# y-hints bytriangulation across frames
-def compute_y_hints_for_particle(df_coords, p_id, projections, theta, SOD, SDD):
-    if 'particle' in df_coords.columns:
-        sub = df_coords[df_coords['particle'] == p_id].sort_values('frame')
-    else:
-        sub = (df_coords.sort_values('frame')
-                          .groupby('frame', as_index=False)
-                          .nth(p_id)
-                          .sort_values('frame'))
-    xp = sub['x'].to_numpy()
-    zp = sub['z'].to_numpy()
-    P  = len(xp)
 
-
-    rays = [camera_ray_world(xp[k], zp[k], k, theta, SOD, SDD) for k in range(P)]
-    mids = []
-    for k in range(P-1):
-        c1,d1 = rays[k]
-        c2,d2 = rays[k+1]
-        mids.append(closest_point_between_rays(c1,d1,c2,d2))
-
-
-    y_hint = np.zeros(P)
-    if P == 1:
-        y_hint[0] = mids[0][1] if mids else 0.0
-    elif P == 2:
-        y_hint[:] = mids[0][1]
-    else:
-        y_hint[0] = mids[0][1]
-        for k in range(1, P-1):
-            y_hint[k] = 0.5*(mids[k-1][1] + mids[k][1])
-        y_hint[P-1] = mids[-1][1]
-    return y_hint
+# Algorithm 3: Here, we will be eliminating the x_0 variable by solving for it beforehand
 
 ### BLOCKS ###
+
 
 # We note by pattern-matching that there are 3 blocks that occur every time
 # Yellow
@@ -86,36 +22,46 @@ block1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2
                   [0, 0, T, 0, 0, 0.5*T**2]])
 print("block 1:\n" + tabulate(block1))
 
+
+# We no longer have the manification equation for x since we used it.
 # Green
 def block2(frame, p_id): # input is the projection number (int) and the particle id (int), output is the block for that projection
 
     frame_coords = coords[coords['frame']==frame] # all particle coords in frame
-    x_pi = frame_coords.iloc[p_id,0] # x coord indexed by particle id in frame
     z_pi = frame_coords.iloc[p_id,1] # z coord indexed by particle id in frame
 
-    block = np.array([[1, -x_pi/SDD, 0],
-                       [0, -z_pi/SDD, 1]])
+    block = np.array([0, -z_pi/SDD, 1])
 
     return block
 print("block2: \n" + str(block2(0, 0)))
 
+
+# We now have to define block 3 as a function because we need x_pi
 # Blue
-block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
-                   [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0],
+def block3(frame, p_id): # input is the projection number (int) and the particle id (int), output is the block for that projection
+
+    frame_coords = coords[coords['frame']==frame] # all particle coords in frame
+    x_pi = frame_coords.iloc[p_id,0] # x coord indexed by particle id in frame
+
+    block = np.array([[0, (x_pi/SDD)*np.cos(theta) - np.sin(theta), 0, -1.0, 0, 0],
+                   [0, (x_pi/SDD)*np.sin(theta) + np.cos(theta), 0, 0, -1.0, 0],
                    [0, 0, 1.0, 0, 0, -1.0]])
-print("block 3:\n" + tabulate(block3))
+
+    return block
+print("block 3:\n" + tabulate(block3(0, 0)))
 
 
-### BLOCKS FOR C MATRIX (ROTATION CONTRIBUTION ONLY) ###
-
-# Yellow
-cblock1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2, -0.5*np.sin(theta)*T**2, 0],
-                  [T*np.sin(theta), T*np.cos(theta), 0, 0.5*np.sin(theta)*T**2, 0.5*np.cos(theta)*T**2, 0]])
-
-
-# Blue
-cblock3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
-                   [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0]])
+#### BLOCKS FOR C MATRIX (ROTATION CONTRIBUTION ONLY) ###
+#
+## Yellow
+#cblock1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2, -0.5*np.sin(theta)*T**2, 0],
+#                  [T*np.sin(theta), T*np.cos(theta), 0, 0.5*np.sin(theta)*T**2, 0.5*np.cos(theta)*T**2, 0]])
+#
+#
+## Blue
+#cblock3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
+#                   [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0]])
+#
 
 ### END ###
 
@@ -129,7 +75,7 @@ def extend(frame, p_id): # input is the projection number (int) and the particle
     z_pi = frame_coords.iloc[p_id,1] # z coord indexed by particle id in frame
 
 
-    return np.array([0,0,0, SOD/SDD*x_pi, SOD/SDD*z_pi])
+    return np.array([-(SOD/SDD)*x_pi*np.cos(theta), -(SOD/SDD)*x_pi*np.sin(theta), 0, SOD/SDD*z_pi])
 print("vector of constants:\n" + str(extend(1, 0))) # First particle has id p_id = 0
 
 
@@ -141,32 +87,33 @@ result = []
 
 x_p1 = coords.iloc[:,0].to_numpy() # Grab all x coords in first frame (frame 0)
 z_p1 = coords.iloc[:,1].to_numpy() # Grab all z coords in first frame
+
 for p in range(num_p):
 
-    # starts with 2 rows and 9 cols every time
-    rows = 2
+    # starts with 1 row and 9 cols every time
+    rows = 1
     cols = 9
 
     M = np.zeros((rows,cols)) # reset the matrix
 
-    M[0:, -3:] = block2(0, p) # Initial Block for the pth particle
+    M[0:, -3:] = block2(0, p) # Initial Block (0th frame) for the pth particle
 
 
-    C = np.zeros((rows,cols)) # reset the rotation contribution matrix
+    #C = np.zeros((rows,cols)) # reset the rotation contribution matrix
 
     
     # Initialize vector
     # vector of known constant values (2 for one projection)
-    b = np.zeros(2)
-    b[0], b[1] = (SOD/SDD)*x_p1[p], (SOD/SDD)*z_p1[p] 
+    b = np.zeros(1)
+    b[0] = (SOD/SDD)*z_p1[p] 
 
     # Initialize d vector (for rotation contribution only)
-    d = np.zeros(2)
+    #d = np.zeros(2)
 
     
     for i in range(projections-1):
         # add 5 rows and 3 cols each time
-        new_rows = 5
+        new_rows = 4
         new_cols = 3
     
         rows += new_rows
@@ -177,22 +124,22 @@ for p in range(num_p):
         M = np.pad(M, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
 
         # Insert blocks
-        M[rows-new_rows:-2, :6] = block1
-        M[-2:, -3:] = block2(i+1, p) # i+1 because we already built the first initial block 2
-        M[rows-new_rows:-2, 6+i*3:] = block3
+        M[rows-new_rows:-1, :6] = block1
+        M[-1:, -3:] = block2(i+1, p) # i+1 because we already built the first initial block 2
+        M[rows-new_rows:-1, 6+i*3:] = block3(i, p)
         
         # Extend our vector of constants
         b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
 
         # Rotation contribution matrix
-        C = np.pad(C, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
+        #C = np.pad(C, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
 
         # Insert blocks (No green block contribution)
-        C[rows-new_rows:-3, :6] = cblock1
-        C[rows-new_rows:-3, 6+i*3:] = cblock3
+        #C[rows-new_rows:-3, :6] = cblock1
+        #C[rows-new_rows:-3, 6+i*3:] = cblock3
         
         # Extend our vector of constants
-        d = np.concatenate((d, np.zeros(5))) # i+1 because we already initilized b for 1 projection
+        #d = np.concatenate((d, np.zeros(5))) # i+1 because we already initilized b for 1 projection
     
     
 
@@ -277,15 +224,12 @@ for p in range(num_p):
     #cond_num = np.linalg.cond(M)
     #print("Condition number (after): " + str(cond_num))
 
-    print(tabulate(C))
+    #print(tabulate(C))
     print(tabulate(M))
 
-    print(np.shape(M))
-    print(np.shape(b))
-    print("M @ x shape: " + str((M @ np.zeros(cols)).shape))
     # Non-linear least_squares
-    def func(x, A, C, b, d, S=np.eye(rows)):
-        residuals = np.linalg.norm((A @ x - b) + S @ (C @ x - d))
+    def func(x, A, b, S=np.eye(rows)):
+        residuals = np.linalg.norm((A @ x - b))
         return residuals
 
     x0 = np.zeros(cols) # Initial guess
@@ -301,7 +245,7 @@ for p in range(num_p):
 
 
 
-    res_lsq = least_squares(func, x0, args=(M, C, b, d))
+    res_lsq = least_squares(func, x0, args=(M, b))
     print("Non-linear least squares solution:")
     #print(res_lsq.x)
 
@@ -389,8 +333,8 @@ print(comparison[['Known Acceleration a_z', 'Estimated Acceleration a_z']])
 
 print(df["y_" + str(projections-1)])
 
+print(flags)
 
-print(b)
 
 
 ##### END ####

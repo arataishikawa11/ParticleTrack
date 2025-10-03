@@ -17,7 +17,7 @@ acc = np.array([[0.0,0.0,0.0],
 
 # Generalize to multiple particles with random initial positions/velocities/accelerations
 # Set seed
-#np.random.seed(11)
+np.random.seed(11)
 
 pos = np.random.uniform(-1, 1, (num_p,3))
 #vel = np.random.uniform(-1, 1, (num_p,3))

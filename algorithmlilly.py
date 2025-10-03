@@ -7,7 +7,13 @@ from testcases import pos,vel,acc,flags # Import known initial positions and vel
 from trackpy_test import coords_test # Import data from preprocessing
 from initial_vals import * # Import initial values
 
+
 coords = coords_test
+
+
+# THIS ONE DOES IMPLEMENT THE NEW LEAST SQUARES WITH BOUNDS AND TIKHONOV REGULARIZATION
+# AND LILLY ADDED THE -Y FLIP AND THE TRIANGULATION AS A WHOLE
+
 
 ### LILLYS ADDED BLOCKS :) ###
 #  rotation about z
@@ -77,63 +83,61 @@ def compute_y_hints_for_particle(df_coords, p_id, projections, theta, SOD, SDD):
         y_hint[P-1] = mids[-1][1]
     return y_hint
 
+
 ### BLOCKS ###
+
 
 # We note by pattern-matching that there are 3 blocks that occur every time
 # Yellow
 block1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2, -0.5*np.sin(theta)*T**2, 0],
                   [T*np.sin(theta), T*np.cos(theta), 0, 0.5*np.sin(theta)*T**2, 0.5*np.cos(theta)*T**2, 0],
                   [0, 0, T, 0, 0, 0.5*T**2]])
-print("block 1:\n" + tabulate(block1))
-
+# print("block 1:\n" + tabulate(block1))  # LILLY COMMENTED OUT
 # Green
 def block2(frame, p_id): # input is the projection number (int) and the particle id (int), output is the block for that projection
+
 
     frame_coords = coords[coords['frame']==frame] # all particle coords in frame
     x_pi = frame_coords.iloc[p_id,0] # x coord indexed by particle id in frame
     z_pi = frame_coords.iloc[p_id,1] # z coord indexed by particle id in frame
 
+
     block = np.array([[1, -x_pi/SDD, 0],
                        [0, -z_pi/SDD, 1]])
 
+
     return block
-print("block2: \n" + str(block2(0, 0)))
+# print("block2: \n" + str(block2(0, 0)))  # LILLY COMMENTED OUT
+
 
 # Blue
 block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
                    [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0],
                    [0, 0, 1.0, 0, 0, -1.0]])
-print("block 3:\n" + tabulate(block3))
+# print("block 3:\n" + tabulate(block3)) # LILLY COMMENTED OUT
 
-
-### BLOCKS FOR C MATRIX (ROTATION CONTRIBUTION ONLY) ###
-
-# Yellow
-cblock1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2, -0.5*np.sin(theta)*T**2, 0],
-                  [T*np.sin(theta), T*np.cos(theta), 0, 0.5*np.sin(theta)*T**2, 0.5*np.cos(theta)*T**2, 0]])
-
-
-# Blue
-cblock3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
-                   [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0]])
-
-### END ###
 
 
 
 # Define a function for extending our vector of constants (known values)
 def extend(frame, p_id): # input is the projection number (int) and the particle id (int), output is a vector of constants
 
+
     frame_coords = coords[coords['frame']==frame] # all particle coords in frame
     x_pi = frame_coords.iloc[p_id,0] # x coord indexed by particle id in frame
     z_pi = frame_coords.iloc[p_id,1] # z coord indexed by particle id in frame
 
 
+
+
     return np.array([0,0,0, SOD/SDD*x_pi, SOD/SDD*z_pi])
-print("vector of constants:\n" + str(extend(1, 0))) # First particle has id p_id = 0
+# print("vector of constants:\n" + str(extend(1, 0))) # First particle has id p_id = 0 # LILLY COMMENTED OUT
+
+
 
 
 ### Algorithm ###
+
 
 # We will store our results in a list. Each entry will be a numpy array of unknowns with index corresponding to the particle id. (result[0] corresponds to particle_id = 0)
 result = []
@@ -141,206 +145,113 @@ result = []
 
 x_p1 = coords.iloc[:,0].to_numpy() # Grab all x coords in first frame (frame 0)
 z_p1 = coords.iloc[:,1].to_numpy() # Grab all z coords in first frame
+
+
+w_yhint = 10.0   # weight for y-hint prior # LILLYS ADDITION
+
+
 for p in range(num_p):
+
 
     # starts with 2 rows and 9 cols every time
     rows = 2
     cols = 9
 
+
     M = np.zeros((rows,cols)) # reset the matrix
 
-    M[0:, -3:] = block2(0, p) # Initial Block for the pth particle
 
-
-    C = np.zeros((rows,cols)) # reset the rotation contribution matrix
-
-    
+     # Initial Block for the pth particle
+    M[:, -3:] = block2(0,p)
+   
     # Initialize vector
     # vector of known constant values (2 for one projection)
     b = np.zeros(2)
-    b[0], b[1] = (SOD/SDD)*x_p1[p], (SOD/SDD)*z_p1[p] 
+    b[0], b[1] = (SOD/SDD)*x_p1[p], (SOD/SDD)*z_p1[p]
 
-    # Initialize d vector (for rotation contribution only)
-    d = np.zeros(2)
 
-    
+   
     for i in range(projections-1):
         # add 5 rows and 3 cols each time
         new_rows = 5
         new_cols = 3
-    
+   
         rows += new_rows
         cols += new_cols
-    
-    
+   
+   
         # Enlarge matrix by new_rows down, new_cols right. fill these w/ 0
         M = np.pad(M, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
-
+   
         # Insert blocks
         M[rows-new_rows:-2, :6] = block1
         M[-2:, -3:] = block2(i+1, p) # i+1 because we already built the first initial block 2
         M[rows-new_rows:-2, 6+i*3:] = block3
-        
+       
         # Extend our vector of constants
         b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
+   
 
-        # Rotation contribution matrix
-        C = np.pad(C, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
+    # add y-hint prior rows for each particle
+    y_hint = compute_y_hints_for_particle(coords, p, projections, theta, SOD, SDD)
 
-        # Insert blocks (No green block contribution)
-        C[rows-new_rows:-3, :6] = cblock1
-        C[rows-new_rows:-3, 6+i*3:] = cblock3
-        
-        # Extend our vector of constants
-        d = np.concatenate((d, np.zeros(5))) # i+1 because we already initilized b for 1 projection
+    # Reshape y_hint vector into same shape as solution vector x
+    y_triangulated = np.zeros(6)
+    for y in y_hint:
+        y_triangulated = np.concatenate((y_triangulated, [0, y, 0]))
     
+    # Create A matrix
+    diag = np.zeros(cols)
+    for i in range(projections+1):
+        diag[-3 -i*3]=0.0 #x
+        diag[-2 -i*3]=1.0 #y
+        diag[-1 -i*3]=0.0 #z
+    A = np.diag(diag)
+    A = np.pad(A, ((0, rows - np.shape(A)[0]),(0,0)), mode = 'constant', constant_values = 0) # add rows of zero to make A the same shape as M
+    print(np.shape(A))
+    print(tabulate(A))
+
+    n_params = M.shape[1] # number of parameters (columns in M)
+
+    w = 10.0 #weight
+
+    # Solve for each particle p
     
-
-
-    # Implementing one validation check
-    validation = np.zeros(cols)
-    validation[7] = 1.0
-    validation[1] = (projections-1)*T
-    validation[4] = 0.5*(projections-1)*T**2
-    validation[-2] = -1.0
-
-    #b = np.append(b, 0) # Append a 0 to b
-    #M = np.vstack((M, validation)) # Append the validation row to M
-    #M=M*10e2
-    #b=b*10e2
-    #print("final b vector: \n" + str(b))
-
-    # Solve
-    # linalg.lstsq returns vector, residuals, rank, s values
-    #x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
-    #result.append(x)
-    # print("For particle_id: " + str(p))
-    # print(result[p])
-    
-    # Implement Kalman Filter
-
-
-
-    # print(np.round(result[p]))
-
-
-    # Calculate condition number
-    #cond_num = np.linalg.cond(M)
-    #print("Condition number (before): " + str(cond_num))
-
-
-    # Tikhonov regularization
-    # We will use the identity matrix as the regularization matrix
-
-    # Regularization parameter
-    #lam = 1e-2
-
-    #n_params = M.shape[1] # number of parameters (columns in M)
-    #I = np.eye(n_params) # identity matrix of size n_params x n_params
-
-    #M_aug = np.vstack((M, lam * I)) # Augment M with regularization
-    #b_aug = np.concatenate((b, np.zeros(n_params))) # Augment b with zeros
-
-    ## Solve the augmented system
-    #x_reg, residuals_reg, rank_reg, svals_reg = np.linalg.lstsq(M_aug, b_aug, rcond=None)
-
-    #result[p] = x_reg  # Update result with regularized solution
-
-    #print(tabulate(M_aug))
-    #print("Regularized solution for particle_id: " + str(p))
-    #print(result[p])
-    #print(np.round(result[p]))
-    #print("Regularized condition number: " + str(np.linalg.cond(M_aug)))
-
-    #print("Shape of M, non-regularized" + str(np.shape(M)))
-    #print("Shape of M, regularized" + str(np.shape(M_aug)))
-    #print("Shape of b, non-regularized" + str(np.shape(b)))
-    #print("Shape of b, regularized" + str(np.shape(b_aug)))
-    #print(tabulate(M))
-
-    ## Implement bounds
-    #upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
-    ##upper_bounds = np.inf * np.ones(n_params) # Upper bounds for each parameter
-    #upper_bounds[:6] = np.inf  # No bounds for the first 6 parameters
-    #lower_bounds = -3 * np.ones(n_params) # Lower bounds for each parameter
-    ##lower_bounds = -np.inf * np.ones(n_params)  # Upper bounds for each parameter
-    #lower_bounds[:6] = -np.inf  # No bounds for the first 6 parameters
-    #print(type(lower_bounds))
-    #print(type(upper_bounds))
-    #print("Lower bounds: " + str(lower_bounds))
-    #print("Upper bounds: " + str(upper_bounds))
-
-    #res = lsq_linear(M, b, verbose = 2)  # Solve with bounds
-    #print("\n Bounded solution for particle_id " + str(p) + " with regularization:")
-    #result.append(res.x)
-    ## Calculate condition number
-    #cond_num = np.linalg.cond(M)
-    #print("Condition number (after): " + str(cond_num))
-
-    print(tabulate(C))
-    print(tabulate(M))
-
-    print(np.shape(M))
-    print(np.shape(b))
-    print("M @ x shape: " + str((M @ np.zeros(cols)).shape))
     # Non-linear least_squares
-    def func(x, A, C, b, d, S=np.eye(rows)):
-        residuals = np.linalg.norm((A @ x - b) + S @ (C @ x - d))
+    def func(x, M, A, y, b, w=0.0):
+        residuals = np.linalg.norm((M @ x - b) + w * A @ (x - y))
         return residuals
 
     x0 = np.zeros(cols) # Initial guess
-    #y0 = np.zeros(cols) # Initial guess for rotation contribution
-    
-    # Create scaling matrix
-   # diag = np.ones(rows)
-   # for i in range(projections+1):
-   #     diag[-1 -i*3]=100.0 #z
-   #     diag[-2 -i*3]=1.0 #y
-   #     diag[-3 -i*3]=1.0 #x
-   # S = np.diag(diag)
+    print(np.shape(x0))
 
-
-
-    res_lsq = least_squares(func, x0, args=(M, C, b, d))
+    res_lsq = least_squares(func, x0, args=(M, A, y_triangulated, b, w))
     print("Non-linear least squares solution:")
     #print(res_lsq.x)
 
 
     result.append(res_lsq.x)
 
-
-    # SVD
-   # U, s, Vt = np.linalg.svd(M, full_matrices=False)
-   # print("s before inverse:" + str(s))
-   # s = 1/s
-   # Sigma = np.diag(s)
-   # print(U)
-   # print("Shape U: " + str(np.shape(U)))
-   # print(Sigma)
-   # print("Shape Sigma: " + str(np.shape(Sigma)))
-   # print(s)
-   # print("Shape s: " + str(np.shape(s)))
-   # print(Vt)
-   # print("Shape Vt: " + str(np.shape(Vt)))
-
-   # A_plus = Vt.T @ Sigma @ U.T
-
-   # x_svd = A_plus @ b
-   # print("SVD solution:")
-   # print(x_svd)
-   # result.append(x_svd)
-
-
-
+print(tabulate(M))
+print(b)
 labels = ['u', 'v', 'w', 'a_x', 'a_y', 'a_z']
+list = []
 for i in range(projections):
-    labels.append('x_' + str(i))
-    labels.append('y_' + str(i))
-    labels.append('z_' + str(i))
+    list.append('x_' + str(i))
+    list.append('y_' + str(i))
+    list.append('z_' + str(i))
+labels = list + labels
+
 
 df = pd.DataFrame(result, columns=labels)
 print("Final DataFrame of results: (each row corresponds to a particle)")
 print(df)
+
+
+# SORRY THIS IS JANK AND IM NOT SURE WHY ITS NEEDED YET - LILLY
+for i in range(projections):
+    df[f'y_{i}'] *= -1
+
 
 # Cross reference results with known initial positions and velocities
 # Note that we only have access to initial positions and velocities, not accelerations
@@ -375,8 +286,9 @@ comparison = pd.DataFrame({
     'Error in Acceleration Z': acc[:,2] - df['a_z']
 })
 
+
 print(comparison[['Known Position X', 'Estimated Position X', 'Error in Position X']])
-print(comparison[['Known Position Y', 'Estimated Position Y', 'Error in Position Y']])
+print(comparison[['Known Position Y', 'Estimated Position Y', 'Error in Position Y']]) # LILLY COMMENTED OUT EVERYTHING :)
 print(comparison[['Known Position Z', 'Estimated Position Z', 'Error in Position Z']])
 print(comparison[['Known Velocity U', 'Estimated Velocity U', 'Error in Velocity U']])
 print(comparison[['Known Velocity V', 'Estimated Velocity V', 'Error in Velocity V']])
@@ -385,14 +297,18 @@ print(comparison[['Known Acceleration a_x', 'Estimated Acceleration a_x']])
 print(comparison[['Known Acceleration a_y', 'Estimated Acceleration a_y']])
 print(comparison[['Known Acceleration a_z', 'Estimated Acceleration a_z']])
 
+
 # Note that if results do not respect bounds, assume poor results
+
 
 print(df["y_" + str(projections-1)])
 
 
-print(b)
 
 
+# print(flags)
 ##### END ####
+
+
 
 
