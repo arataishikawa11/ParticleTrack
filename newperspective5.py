@@ -5,6 +5,8 @@ from scipy.optimize import least_squares
 # maniac crazy good with acceleration
 # checking my math
 
+# I THINK I DID THIS WRONG WITH ACCELERATION STAND BY
+
 # KNOBS GEOMETRY
 SDD = 500.0
 SOD = 250.0
