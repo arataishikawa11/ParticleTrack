@@ -20,10 +20,10 @@ acc = np.array([[0.0,0.0,0.0],
 np.random.seed(11)
 
 pos = np.random.uniform(-1, 1, (num_p,3))
-#vel = np.random.uniform(-1, 1, (num_p,3))
-#acc = np.random.uniform(-1, 1, (num_p,3))
-vel = np.zeros((num_p,3))
-acc = np.zeros((num_p,3))
+vel = np.random.uniform(-1, 1, (num_p,3))
+acc = np.random.uniform(-1, 1, (num_p,3))
+#vel = np.zeros((num_p,3))
+#acc = np.zeros((num_p,3))
 
 
 # Initialize a numpy array that stores x coord in projection frame

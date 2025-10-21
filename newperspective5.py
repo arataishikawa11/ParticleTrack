@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
+import trackpy as tp
 
 SDD = 500.0     # Source-to-Detector Distance [mm]
 SOD = 250.0     # Source-to-Object Distance [mm]
@@ -10,6 +11,8 @@ projections = 12          # Number of projection frames
 num_p = 5                 # Number of particles
 
 W = projections
+
+np.random.seed(11)  # For reproducibility
 
 pos0_TRUE = np.random.uniform(-1, 1, size=(num_p, 3))
 vel0_TRUE = np.random.uniform(-1, 1, size=(num_p, 3))
@@ -54,6 +57,60 @@ for p in range(num_p):
 
         if np.any(np.abs(pos_TRUE) > 3.0):
             flags[p, k] = 1.0
+
+
+
+### INTEGRATE TRACKPY ###
+print("the synthetic data (x): \n" + str(x_PROJECTION))
+print("the shape: " + str(np.shape(x_PROJECTION)))
+
+# Flatten the arrays
+flattened_x = x_PROJECTION.flatten()
+flattened_z = z_PROJECTION.flatten()
+
+# Create frames column
+frames = np.arange(projections)
+frames = np.tile(frames,num_p)
+
+# Shuffle
+shuffled_indices = np.random.permutation(len(flattened_x))
+flattened_x = flattened_x[shuffled_indices]
+flattened_z = flattened_z[shuffled_indices]
+frames = frames[shuffled_indices]
+
+
+data_array = np.array((flattened_x, flattened_z, frames)).T
+coords = pd.DataFrame(data_array, columns = ['x','z','frame'])
+print(coords)
+
+
+# Link particle trajectories from coords dataframe with prediction enabled
+# Beware of column names 
+pred = tp.predict.NearestVelocityPredict()
+traj_pred = pred.link_df(coords, search_range = 10, pos_columns = ['x','z'], memory = 5)
+
+# Final coordinate dataframe with particle IDs
+coords = traj_pred[["x","z","frame","particle"]]
+print(coords)
+
+# Check that trackpy integration doesn't alter the script
+print(coords.to_numpy())
+
+# We should be able to reconstruct X_PROJECTION and Z_PROJECTION from coords
+xarray = np.zeros((num_p, W)) # Where we store our x data, indexed by (particle, frame)
+zarray = np.zeros((num_p, W)) # Same for z data
+
+for p in range(num_p):
+    particle_data = coords[coords['particle'] == p]
+    xarray[p] = particle_data['x'].to_numpy()
+    zarray[p] = particle_data['z'].to_numpy()
+
+# Check that they hold the same values
+print("xarray = \n" + str(xarray))
+print("x_PROJECTION = \n" + str(x_PROJECTION))
+print(np.array_equal(xarray, x_PROJECTION))
+
+### END ###
 
 # NONLINEAR LEAST-SQUARES SOLVER
 
@@ -128,6 +185,7 @@ acc_all_BESTGUESS = np.zeros((num_p, 3))
 
 for p in range(num_p):
     pos_BESTGUESS, vel_BESTGUESS, acc_BESTGUESS, res = solve_particle_nonlinear(
+        #xp_vec=xarray[p], zp_vec=zarray[p],
         xp_vec=x_PROJECTION[p], zp_vec=z_PROJECTION[p],
         W=W, SDD=SDD, SOD=SOD, theta=theta, T=T,
         use_acc=True, verbose=0

@@ -219,18 +219,40 @@ for p in range(num_p):
     
     # Non-linear least_squares
     def func(x, M, A, y, b, w=0.0):
-        residuals = np.linalg.norm((M @ x - b) + w * A @ (x - y))
+        residuals = (M @ x - b) + w * A @ (x - y)
         return residuals
 
     x0 = np.zeros(cols) # Initial guess
     print(np.shape(x0))
 
-    res_lsq = least_squares(func, x0, args=(M, A, y_triangulated, b, w))
+    res_lsq = least_squares(func, x0, args=(M, A, y_triangulated, b, w), 
+                            method = 'lm', max_nfev=200)
     print("Non-linear least squares solution:")
     #print(res_lsq.x)
 
 
-    result.append(res_lsq.x)
+    #result.append(res_lsq.x)
+
+    M_eff = M + w * A
+    b_eff = b + w * A @ y_triangulated
+    # Compute SVD of M_eff
+    U, S, Vt = np.linalg.svd(M_eff, full_matrices=False)
+
+    # Compute the pseudoinverse of M_eff using SVD
+    S_inv = np.diag(1 / S)
+    M_pinv = Vt.T @ S_inv @ U.T
+
+    # Solve for x
+    x_svd = M_pinv @ b_eff
+
+    print("Solution using SVD decomposition:")
+    #result.append(x_svd)
+
+    lambda_reg = 1e-3
+    S_reg = S / (S**2 + lambda_reg)
+    x_svd_reg = (Vt.T * S_reg) @ (U.T @ b_eff)
+    result.append(x_svd_reg)
+
 
 print(tabulate(M))
 print(b)
