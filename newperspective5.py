@@ -7,8 +7,8 @@ SDD = 500.0     # Source-to-Detector Distance [mm]
 SOD = 250.0     # Source-to-Object Distance [mm]
 T = 0.1         # Time step between projections [s]
 theta = np.deg2rad(2.0)   # Detector rotation per frame [radians]
-projections = 12          # Number of projection frames
-num_p = 5                 # Number of particles
+projections = 5         # Number of projection frames
+num_p = 2                 # Number of particles
 
 W = projections
 
@@ -106,10 +106,19 @@ for p in range(num_p):
     zarray[p] = particle_data['z'].to_numpy()
 
 # Check that they hold the same values
+# Updated the sanity check section that compares the trackpy output to the synthetic data 
+# to ensure parrticle trajectories are identical regardless of order in the array
 print("xarray = \n" + str(xarray))
 print("x_PROJECTION = \n" + str(x_PROJECTION))
-print(np.array_equal(xarray, x_PROJECTION))
+sanity_check=np.zeros((np.shape(x_PROJECTION)[0],1))
+for r in range(num_p):
+    for rr in range(num_p):
+        temp=np.array_equal(x_PROJECTION[r,:],xarray[rr,:])
+        if temp==True:
+            sanity_check[r]=temp
+            break
 
+print("Sanity Check:", sanity_check.flatten())
 ### END ###
 
 # NONLINEAR LEAST-SQUARES SOLVER
@@ -254,8 +263,7 @@ for p in range(num_p):
     rmse_acc = np.sqrt(np.mean(err_acc**2))
 
     print(f"\nParticle {p} RMSE:")
-    print(f"  pos (x,y,z) = ({rmse_pos[0]:.6f}, {rmse_pos[1]:.6f}, {rmse_pos[2]:.6f})")
-    print(f"  vel_rmse = {rmse_vel:.6f}")
-    print(f"  acc_rmse = {rmse_acc:.6f}")
-    print(f"  v_BESTGUESS = {vel_all_BESTGUESS[p]}, a_BESTGUESS = {acc_all_BESTGUESS[p]}")
-
+    print(f"  pos (x,y,z) = ({rmse_pos[0]:.4e}, {rmse_pos[1]:.4e}, {rmse_pos[2]:.4e})")
+    print(f"  vel_rmse = {rmse_vel:.4e}")
+    print(f"  acc_rmse = {rmse_acc:.4e}")
+    print(f" initialpos_BESTGUESS={pos_all_BESTGUESS[p,0]}, v_BESTGUESS = {vel_all_BESTGUESS[p]}, a_BESTGUESS = {acc_all_BESTGUESS[p]}")
