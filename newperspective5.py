@@ -175,11 +175,11 @@ def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T, lambda_bound
             bounds=np.zeros(3)
             bounds[pos_k_ITERATING>3] = 1
             bounds[pos_k_ITERATING<-3] = 1
-            res[8*k]   = (xp_vec[k] - x_pred_ITERATING)
-            res[8*k+1] = (zp_vec[k] - z_pred_ITERATING)
-            res[8*k+2:8*k+5] = lambda_bounds*(bounds)
-            res[8*k+5:8*k+8] = np.sqrt(lambda_reg)*(v_ITERATING)
-            res[8*k+8:8*k+11] = np.sqrt(lambda_reg)*(a_ITERATING)
+            res[11*k]   = (xp_vec[k] - x_pred_ITERATING)
+            res[11*k+1] = (zp_vec[k] - z_pred_ITERATING)
+            res[11*k+2:11*k+5] = lambda_bounds*(bounds)
+            res[11*k+5:11*k+8] = np.sqrt(lambda_reg)*(v_ITERATING-init_guess[3:6])
+            res[11*k+8:11*k+11] = np.sqrt(lambda_reg)*(a_ITERATING-init_guess[6:9])
         return res
 
     # Run least-squares optimization
