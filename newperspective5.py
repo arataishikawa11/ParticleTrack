@@ -7,8 +7,8 @@ SDD = 500.0     # Source-to-Detector Distance [mm]
 SOD = 250.0     # Source-to-Object Distance [mm]
 T = 0.1         # Time step between projections [s]
 theta = np.deg2rad(2.0)   # Detector rotation per frame [radians]
-projections = 5         # Number of projection frames
-num_p = 2                 # Number of particles
+projections = 10        # Number of projection frames
+num_p = 4                 # Number of particles
 
 W = projections
 
@@ -63,6 +63,15 @@ for p in range(num_p):
 ### INTEGRATE TRACKPY ###
 print("the synthetic data (x): \n" + str(x_PROJECTION))
 print("the shape: " + str(np.shape(x_PROJECTION)))
+print("X_projection", x_PROJECTION)
+print("Z_projection", z_PROJECTION)
+# add noise
+for k in range(projections):
+    noise=np.random.normal(0,0.01,num_p)
+    x_PROJECTION[:,k]=x_PROJECTION[:,k]+noise
+    z_PROJECTION[:,k]=z_PROJECTION[:,k]+noise
+print("X_noise", x_PROJECTION)
+print("Z_noise", z_PROJECTION)
 
 # Flatten the arrays
 flattened_x = x_PROJECTION.flatten()
@@ -123,7 +132,7 @@ print("Sanity Check:", sanity_check.flatten())
 
 # NONLINEAR LEAST-SQUARES SOLVER
 
-def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T,
+def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T, lambda_bounds, lambda_reg,
                              use_acc=True, init_guess=None, verbose=0):
 
     n_params = 9 if use_acc else 6
@@ -141,7 +150,7 @@ def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T,
             v_ITERATING  = u[3:6]
             a_ITERATING  = np.zeros(3)
 
-        res = np.zeros(2*W)
+        res = np.zeros(11*W)
         for k in range(W):
             phi = k * theta
             c, s = np.cos(phi), np.sin(phi)
@@ -162,10 +171,15 @@ def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T,
             x_pred_ITERATING = (SDD / denom) * x_c_ITERATING
             z_pred_ITERATING = (SDD / denom) * z_c_ITERATING
 
-            # Residuals in projection space (measured - predicted)
-            res[2*k]   = xp_vec[k] - x_pred_ITERATING
-            res[2*k+1] = zp_vec[k] - z_pred_ITERATING
-
+            # Residuals in projection space (measured - predicted) and applying upper and lower bounds on positions, regularization on velocities and accelerations
+            bounds=np.zeros(3)
+            bounds[pos_k_ITERATING>3] = 1
+            bounds[pos_k_ITERATING<-3] = 1
+            res[8*k]   = (xp_vec[k] - x_pred_ITERATING)
+            res[8*k+1] = (zp_vec[k] - z_pred_ITERATING)
+            res[8*k+2:8*k+5] = lambda_bounds*(bounds)
+            res[8*k+5:8*k+8] = np.sqrt(lambda_reg)*(v_ITERATING)
+            res[8*k+8:8*k+11] = np.sqrt(lambda_reg)*(a_ITERATING)
         return res
 
     # Run least-squares optimization
@@ -196,7 +210,7 @@ for p in range(num_p):
     pos_BESTGUESS, vel_BESTGUESS, acc_BESTGUESS, res = solve_particle_nonlinear(
         #xp_vec=xarray[p], zp_vec=zarray[p],
         xp_vec=x_PROJECTION[p], zp_vec=z_PROJECTION[p],
-        W=W, SDD=SDD, SOD=SOD, theta=theta, T=T,
+        W=W, SDD=SDD, SOD=SOD, theta=theta, T=T,lambda_bounds=10, lambda_reg=0.01,
         use_acc=True, verbose=0
     )
     pos_all_BESTGUESS[p] = pos_BESTGUESS
@@ -266,4 +280,4 @@ for p in range(num_p):
     print(f"  pos (x,y,z) = ({rmse_pos[0]:.4e}, {rmse_pos[1]:.4e}, {rmse_pos[2]:.4e})")
     print(f"  vel_rmse = {rmse_vel:.4e}")
     print(f"  acc_rmse = {rmse_acc:.4e}")
-    print(f" initialpos_BESTGUESS={pos_all_BESTGUESS[p,0]}, v_BESTGUESS = {vel_all_BESTGUESS[p]}, a_BESTGUESS = {acc_all_BESTGUESS[p]}")
+    print(f" initialpos_BESTGUESS={pos_all_BESTGUESS[p,0]}, v_BESTGUESS = {vel_all_BESTGUESS[p]}, a_BESTGUESS = {acc_all_BESTGUESS[p]}") 
