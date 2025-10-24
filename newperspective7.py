@@ -11,14 +11,14 @@ import matplotlib.colors as mcolors
 # KNOBS
 SDD = 500.0
 SOD = 150.0
-T = 0.1
+T = 0.15
 theta = np.deg2rad(4)
-projections = 37
-num_p = 500
+projections = 40
+num_p = 100
 NOISE_STD = 0.009 # this is BY FAR the most sensitive parameter other than projections/theta... even 0.001 makes a big difference
 W = projections
 
-#   TRUE TRAJECTORY GENERATION  (rotating sample) fixed this for yall
+#   TRUE TRAJECTORY GENERATION  (rotating sample) fixed this :)
 
 # np.random.seed(0)
 pos0_TRUE = np.random.uniform(-1, 1, size=(num_p, 3))
@@ -103,15 +103,6 @@ def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T,
             res[2*k+1] = zp_vec[k] - z_pred
         return res
 
-    # SOLVE USING LEAST SQUARES BUT THIS TIME TRF
-    # result = least_squares(
-    #     residuals, init_guess,
-    #     method='trf',
-    #     loss='soft_l1',
-    #     f_scale=max(NOISE_STD, 1e-3),
-    #     max_nfev=5000,
-    #     verbose=verbose
-    # )
 
     # I show in concept6.py that the best loss function is 'linear' here
     result = least_squares(
@@ -136,8 +127,6 @@ def solve_particle_nonlinear(xp_vec, zp_vec, W, SDD, SOD, theta, T,
     return pos_BEST, v, a, result
 
 
-
-
 pos_all_BEST = np.zeros_like(pos_all_TRUE)
 vel_all_BEST = np.zeros((num_p, 3))
 acc_all_BEST = np.zeros((num_p, 3))
@@ -153,6 +142,19 @@ for p in range(num_p):
     pos_all_BEST[p] = pos_BEST
     vel_all_BEST[p] = vel_BEST
     acc_all_BEST[p] = acc_BEST
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #   POST-PROCESSING
@@ -240,3 +242,98 @@ print(f"  pos_rmse_avg (x,y,z) = ({avg_rmse_pos[0]:.6f}, {avg_rmse_pos[1]:.6f}, 
 print(f"  vel_rmse_avg = {avg_rmse_vel:.6f}")
 print(f"  acc_rmse_avg = {avg_rmse_acc:.6f}")
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# THREE DIMENSIONAL PLOTTING OF A SINGLE PARTICLE'S TRAJECTORY
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+# WE'RE PICKING THE WOOOORRRSST ONE TO SEE THE DIFFERENCE ALL THE OTHER PARTICLES 
+# SHOULD HAVE MUCH NICER CLEANER FITS BUT THIS IS THE WORST ONE
+rmse_pos_all = np.zeros((num_p, 3))
+for p in range(num_p):
+    err = pos_all_TRUE[p] - pos_all_BEST[p]
+    rmse_pos_all[p] = np.sqrt(np.mean(err**2, axis=0))
+per_particle_rmse = np.linalg.norm(rmse_pos_all, axis=1)
+p_show = int(np.argmax(per_particle_rmse))  # or set p_show = 0
+
+P_true = pos_all_TRUE[p_show]   # (W,3)
+P_est  = pos_all_BEST[p_show]   # (W,3)
+err    = P_true - P_est
+
+print(f"\n[Plot] Particle {p_show}  RMSE_xyz = {rmse_pos_all[p_show]}  |RMSE| = {per_particle_rmse[p_show]:.6e}")
+print(f" max |error| per-axis: {np.max(np.abs(err), axis=0)}")
+
+fig = plt.figure(figsize=(9, 8))
+ax = fig.add_subplot(111, projection='3d')
+ax.set_title(f"TRUE vs EST (particle {p_show})")
+
+# trajectories
+ax.plot(P_true[:,0], P_true[:,1], P_true[:,2], color='gray',  lw=1.5, label='TRUE', alpha=0.9)
+ax.plot(P_est[:,0],  P_est[:,1],  P_est[:,2],  color='red',   lw=1.8, label='EST',  alpha=0.9)
+
+ax.scatter(P_true[:,0], P_true[:,1], P_true[:,2], s=12, color='gray', alpha=0.8)
+ax.scatter(P_est[:,0],  P_est[:,1],  P_est[:,2],  s=12, color='red',  alpha=0.8)
+
+# # tiny quivers to show error direction plotted just to make sure we werent 
+# getting like the correct path but wrong direction
+# scale = 1.0
+# ax.quiver(P_est[:,0], P_est[:,1], P_est[:,2],
+#           err[:,0],   err[:,1],   err[:,2],
+#           length=1.0, normalize=False, color='black', alpha=0.4)
+
+ax.set_xlabel("X [world]"); ax.set_ylabel("Y [world]"); ax.set_zlabel("Z [world]")
+ax.legend(loc='upper left')
+ax.view_init(elev=22, azim=45)
+ax.grid(True)
+
+# equal aspect ratio
+lims = np.array([
+    [P_true[:,0].min(), P_true[:,0].max()],
+    [P_true[:,1].min(), P_true[:,1].max()],
+    [P_true[:,2].min(), P_true[:,2].max()]
+])
+mins = lims[:,0]; maxs = lims[:,1]
+cent = (mins + maxs)/2.0
+rad  = np.max(maxs - mins)/2.0
+ax.set_xlim(cent[0]-rad, cent[0]+rad)
+ax.set_ylim(cent[1]-rad, cent[1]+rad)
+ax.set_zlim(cent[2]-rad, cent[2]+rad)
+
+plt.tight_layout()
+plt.show()
+
+t = np.arange(W)
+fig2, axes = plt.subplots(3, 1, figsize=(9, 7), sharex=True)
+labs = ['X', 'Y', 'Z']
+for i in range(3):
+    axes[i].plot(t, P_true[:,i], '-',  lw=1.8, label='TRUE', color='gray')
+    axes[i].plot(t, P_est[:,i],  '--', lw=1.6, label='EST',  color='red')
+    axes[i].plot(t, err[:,i],   ':',  lw=1.2, label='ERR',  color='black', alpha=0.6)
+    axes[i].set_ylabel(labs[i])
+    axes[i].grid(True)
+axes[-1].set_xlabel('frame')
+axes[0].legend(ncol=3, loc='best')
+plt.tight_layout()
+plt.show()
