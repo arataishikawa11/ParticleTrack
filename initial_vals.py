@@ -11,5 +11,5 @@ projections = 12
 assert projections >= 1
 
 # Number of particles
-num_p = 2
+num_p = 1
 assert num_p >= 1
