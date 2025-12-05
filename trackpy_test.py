@@ -6,9 +6,11 @@ import numpy as np
 import pandas as pd
 import trackpy as tp # trackpy is a particle tracking toolkit https://soft-matter.github.io/trackpy/v0.6.4/
 
-from testcases import coords_test
+#from testcases2 import coords_test
+from testcases3 import coords_test
 
-print(coords_test)
+tp.quiet() # Turn off trackpy console log printing
+
 coords = coords_test
 
 # Link particle trajectories from coords dataframe with prediction enabled
@@ -30,4 +32,3 @@ plt.show()
 
 coords_test = traj_pred[["x","z","frame","particle"]]
 print(coords_test)
-

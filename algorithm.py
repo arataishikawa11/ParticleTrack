@@ -3,80 +3,14 @@ import pandas as pd
 import scipy as sp
 from scipy.optimize import lsq_linear, least_squares
 from tabulate import tabulate
-from testcases import pos,vel,acc,flags # Import known initial positions and velocities for cross-referencing
-from trackpy_test import coords_test # Import data from preprocessing
+#from testcases import pos,vel,acc,flags # Import known initial positions and velocities for cross-referencing
+#from testcases2 import x_global, y_global, z_global, vel, acc # Import known global positions for cross-referencing
+from testcases3 import x_global, y_global, z_global, vel, acc # Import known global positions for cross-referencing
+from trackpy_test import tp, coords_test # Import data from preprocessing
 from initial_vals import * # Import initial values
 
 coords = coords_test
-
-### LILLYS ADDED BLOCKS :) ###
-#  rotation about z
-def Rz(phi):
-    c, s = np.cos(phi), np.sin(phi)
-    return np.array([[c, -s, 0.0],
-                     [s,  c, 0.0],
-                     [0.0, 0.0, 1.0]], dtype=float)
-#  build from one measurement
-def camera_ray_world(xp, zp, k, theta, SOD, SDD):
-    Rk = Rz(k*theta)
-    c_world = Rk @ np.array([0.0, +SOD, 0.0])              # source position in world
-    d_cam   = np.array([xp, -SDD, zp], dtype=float)        # ray through detector pixel
-    d_cam  /= np.linalg.norm(d_cam) + 1e-15
-    d_world = Rk @ d_cam
-    d_world /= np.linalg.norm(d_world) + 1e-15
-    return c_world, d_world
-# closest midpoint between two rays
-def closest_point_between_rays(c1, d1, c2, d2):
-    r = c1 - c2
-    a = 1.0
-    b = float(d1 @ d2)
-    c = 1.0
-    d = float(d1 @ r)
-    e = float(d2 @ r)
-    denom = a*c - b*b
-    if abs(denom) < 1e-12:
-        t = -d
-        s = 0.0
-    else:
-        t = (b*e - c*d) / denom
-        s = (a*e - b*d) / denom
-    p1 = c1 + t*d1
-    p2 = c2 + s*d2
-    return 0.5*(p1 + p2)
-# y-hints bytriangulation across frames
-def compute_y_hints_for_particle(df_coords, p_id, projections, theta, SOD, SDD):
-    if 'particle' in df_coords.columns:
-        sub = df_coords[df_coords['particle'] == p_id].sort_values('frame')
-    else:
-        sub = (df_coords.sort_values('frame')
-                          .groupby('frame', as_index=False)
-                          .nth(p_id)
-                          .sort_values('frame'))
-    xp = sub['x'].to_numpy()
-    zp = sub['z'].to_numpy()
-    P  = len(xp)
-
-
-    rays = [camera_ray_world(xp[k], zp[k], k, theta, SOD, SDD) for k in range(P)]
-    mids = []
-    for k in range(P-1):
-        c1,d1 = rays[k]
-        c2,d2 = rays[k+1]
-        mids.append(closest_point_between_rays(c1,d1,c2,d2))
-
-
-    y_hint = np.zeros(P)
-    if P == 1:
-        y_hint[0] = mids[0][1] if mids else 0.0
-    elif P == 2:
-        y_hint[:] = mids[0][1]
-    else:
-        y_hint[0] = mids[0][1]
-        for k in range(1, P-1):
-            y_hint[k] = 0.5*(mids[k-1][1] + mids[k][1])
-        y_hint[P-1] = mids[-1][1]
-    return y_hint
-
+tp.quiet()
 ### BLOCKS ###
 
 # We note by pattern-matching that there are 3 blocks that occur every time
@@ -105,17 +39,6 @@ block3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
                    [0, 0, 1.0, 0, 0, -1.0]])
 print("block 3:\n" + tabulate(block3))
 
-
-### BLOCKS FOR C MATRIX (ROTATION CONTRIBUTION ONLY) ###
-
-# Yellow
-cblock1 = np.array([[T*np.cos(theta), -T*np.sin(theta), 0, 0.5*np.cos(theta)*T**2, -0.5*np.sin(theta)*T**2, 0],
-                  [T*np.sin(theta), T*np.cos(theta), 0, 0.5*np.sin(theta)*T**2, 0.5*np.cos(theta)*T**2, 0]])
-
-
-# Blue
-cblock3 = np.array([[np.cos(theta), -np.sin(theta), 0, -1.0, 0, 0],
-                   [np.sin(theta), np.cos(theta), 0, 0, -1.0, 0]])
 
 ### END ###
 
@@ -151,9 +74,6 @@ for p in range(num_p):
 
     M[0:, -3:] = block2(0, p) # Initial Block for the pth particle
 
-
-    C = np.zeros((rows,cols)) # reset the rotation contribution matrix
-
     
     # Initialize vector
     # vector of known constant values (2 for one projection)
@@ -184,151 +104,64 @@ for p in range(num_p):
         # Extend our vector of constants
         b = np.concatenate((b,extend(i+1, p))) # i+1 because we already initilized b for 1 projection
 
-        # Rotation contribution matrix
-        C = np.pad(C, ((0,new_rows),(0,new_cols)), mode = 'constant', constant_values=0)
 
-        # Insert blocks (No green block contribution)
-        C[rows-new_rows:-3, :6] = cblock1
-        C[rows-new_rows:-3, 6+i*3:] = cblock3
-        
-        # Extend our vector of constants
-        d = np.concatenate((d, np.zeros(5))) # i+1 because we already initilized b for 1 projection
-    
-    
-
-
-    # Implementing one validation check
-    validation = np.zeros(cols)
-    validation[7] = 1.0
-    validation[1] = (projections-1)*T
-    validation[4] = 0.5*(projections-1)*T**2
-    validation[-2] = -1.0
-
-    #b = np.append(b, 0) # Append a 0 to b
-    #M = np.vstack((M, validation)) # Append the validation row to M
-    #M=M*10e2
-    #b=b*10e2
-    #print("final b vector: \n" + str(b))
-
-    # Solve
-    # linalg.lstsq returns vector, residuals, rank, s values
-    #x, residuals, rank, svals = np.linalg.lstsq(M, b, rcond=None)
-    #result.append(x)
-    # print("For particle_id: " + str(p))
-    # print(result[p])
-    
-    # Implement Kalman Filter
-
-
-
-    # print(np.round(result[p]))
-
-
-    # Calculate condition number
-    #cond_num = np.linalg.cond(M)
-    #print("Condition number (before): " + str(cond_num))
-
-
-    # Tikhonov regularization
-    # We will use the identity matrix as the regularization matrix
-
-    # Regularization parameter
-    #lam = 1e-2
-
-    #n_params = M.shape[1] # number of parameters (columns in M)
-    #I = np.eye(n_params) # identity matrix of size n_params x n_params
-
-    #M_aug = np.vstack((M, lam * I)) # Augment M with regularization
-    #b_aug = np.concatenate((b, np.zeros(n_params))) # Augment b with zeros
-
-    ## Solve the augmented system
-    #x_reg, residuals_reg, rank_reg, svals_reg = np.linalg.lstsq(M_aug, b_aug, rcond=None)
-
-    #result[p] = x_reg  # Update result with regularized solution
-
-    #print(tabulate(M_aug))
-    #print("Regularized solution for particle_id: " + str(p))
-    #print(result[p])
-    #print(np.round(result[p]))
-    #print("Regularized condition number: " + str(np.linalg.cond(M_aug)))
-
-    #print("Shape of M, non-regularized" + str(np.shape(M)))
-    #print("Shape of M, regularized" + str(np.shape(M_aug)))
-    #print("Shape of b, non-regularized" + str(np.shape(b)))
-    #print("Shape of b, regularized" + str(np.shape(b_aug)))
-    #print(tabulate(M))
-
-    ## Implement bounds
-    #upper_bounds = 3 * np.ones(n_params)  # Upper bounds for each parameter
-    ##upper_bounds = np.inf * np.ones(n_params) # Upper bounds for each parameter
-    #upper_bounds[:6] = np.inf  # No bounds for the first 6 parameters
-    #lower_bounds = -3 * np.ones(n_params) # Lower bounds for each parameter
-    ##lower_bounds = -np.inf * np.ones(n_params)  # Upper bounds for each parameter
-    #lower_bounds[:6] = -np.inf  # No bounds for the first 6 parameters
-    #print(type(lower_bounds))
-    #print(type(upper_bounds))
-    #print("Lower bounds: " + str(lower_bounds))
-    #print("Upper bounds: " + str(upper_bounds))
-
-    #res = lsq_linear(M, b, verbose = 2)  # Solve with bounds
-    #print("\n Bounded solution for particle_id " + str(p) + " with regularization:")
-    #result.append(res.x)
-    ## Calculate condition number
-    #cond_num = np.linalg.cond(M)
-    #print("Condition number (after): " + str(cond_num))
-
-    print(tabulate(C))
-    print(tabulate(M))
-
-    print(np.shape(M))
-    print(np.shape(b))
-    print("M @ x shape: " + str((M @ np.zeros(cols)).shape))
     # Non-linear least_squares
-    def func(x, A, C, b, d, S=np.eye(rows)):
-        residuals = np.linalg.norm((A @ x - b) + S @ (C @ x - d))
-        return residuals
+    def func(x, A, b):
+        residuals = (A @ x - b)
+        xvals = x[6::3]
+        yvals = x[7::3]
+        zvals = x[8::3]
+        xpvals = (SDD/(SOD+yvals))*xvals
+        zpvals = (SDD/(SOD+yvals))*zvals
+        particle_coords = coords[coords['particle'] == 0]
+        x_pi = particle_coords.iloc[:,0].to_numpy() # true projection coords
+        z_pi = particle_coords.iloc[:,2].to_numpy() # true projection coords
+        target=np.zeros_like(residuals)
+        target[6::3] = np.linalg.norm(xpvals - x_pi) #+ np.linalg.norm(zpvals - z_pi) # target is the sum of the distances between the projected coordinates and the actual coordinates
+        target[8::3] = np.linalg.norm(zpvals - z_pi) #+ np.linalg.norm(zpvals - z_pi) # target is the sum of the distances between the projected coordinates and the actual coordinates
+        
+        return residuals + target
+
+    # def func(x, A, b):
+    #     residuals = (A @ x - b)
+    #     return residuals
+
+    y_vals = np.linspace(-3, 3, 50)
+    z_val = np.linspace(-3, 3, 50)
 
     x0 = np.zeros(cols) # Initial guess
-    #y0 = np.zeros(cols) # Initial guess for rotation contribution
+    best_result = None
+
+    # for y in y_vals:
+    #     for z in z_val:
+    #         x0[7] = y
+    #         x0[8] = z
+
+
+    #         x_solution = least_squares(func, x0, args=(M, b))
+    #         if best_result is None or x_solution.cost < best_result.cost:
+    #             if best_result != None and np.abs(x_solution.cost - best_result.cost) < 0.1:
+    #                 break
+    #             best_result = x_solution
+    #             print("New best cost for particle %d: %f at y=%2.4f, z=%2.4f" % (p, best_result.cost, y, z))
+
+    # num_iters = 10
+    # for i in range(num_iters):
+    #     # Solve using least squares
+    #     res_lsq = least_squares(func, x0, args=(M, b), max_nfev=2000)
+    #     if res_lsq.cost < (best_result.cost if best_result else float('inf')):
+    #         print("Found better result on iteration %d with cost %f" % (i, res_lsq.cost))
+    #         best_result = res_lsq
+    #     x0 = np.random.uniform(low=-3.0, high=3.0, size=cols)  # Random restart
+    # # Solve using least squares
+
     
-    # Create scaling matrix
-   # diag = np.ones(rows)
-   # for i in range(projections+1):
-   #     diag[-1 -i*3]=100.0 #z
-   #     diag[-2 -i*3]=1.0 #y
-   #     diag[-3 -i*3]=1.0 #x
-   # S = np.diag(diag)
+    
 
+    best_result = least_squares(func, x0, args=(M, b))
 
+    result.append(best_result.x)
 
-    res_lsq = least_squares(func, x0, args=(M, C, b, d))
-    print("Non-linear least squares solution:")
-    #print(res_lsq.x)
-
-
-    result.append(res_lsq.x)
-
-
-    # SVD
-   # U, s, Vt = np.linalg.svd(M, full_matrices=False)
-   # print("s before inverse:" + str(s))
-   # s = 1/s
-   # Sigma = np.diag(s)
-   # print(U)
-   # print("Shape U: " + str(np.shape(U)))
-   # print(Sigma)
-   # print("Shape Sigma: " + str(np.shape(Sigma)))
-   # print(s)
-   # print("Shape s: " + str(np.shape(s)))
-   # print(Vt)
-   # print("Shape Vt: " + str(np.shape(Vt)))
-
-   # A_plus = Vt.T @ Sigma @ U.T
-
-   # x_svd = A_plus @ b
-   # print("SVD solution:")
-   # print(x_svd)
-   # result.append(x_svd)
 
 
 
@@ -346,15 +179,15 @@ print(df)
 # Note that we only have access to initial positions and velocities, not accelerations
 print("\n Cross-referencing results with known initial positions and velocities:")
 comparison = pd.DataFrame({
-    'Known Position X': pos[:,0],
-    'Known Position Y': pos[:,1],
-    'Known Position Z': pos[:,2],
-    'Estimated Position X': df['x_' + str(projections-1)],
-    'Estimated Position Y': df['y_' + str(projections-1)],
-    'Estimated Position Z': df['z_' + str(projections-1)],
-    'Error in Position X': pos[:,0] - df['x_'+str(projections-1)],
-    'Error in Position Y': pos[:,1] - df['y_'+str(projections-1)],
-    'Error in Position Z': pos[:,2] - df['z_'+str(projections-1)],
+    'Known Position X': x_global[:,0], # initial global x positions
+    'Known Position Y': y_global[:,0], # initial global y positions
+    'Known Position Z': z_global[:,0], # initial global z positions 
+    'Estimated Position X': df['x_0'],
+    'Estimated Position Y': df['y_0'],
+    'Estimated Position Z': df['z_0'],
+    'Error in Position X': x_global[:,0] - df['x_0'],
+    'Error in Position Y': y_global[:,0] - df['y_0'],
+    'Error in Position Z': z_global[:,0] - df['z_0'],
     'Known Velocity U': vel[:,0],
     'Known Velocity V': vel[:,1],
     'Known Velocity W': vel[:,2],
@@ -385,13 +218,9 @@ print(comparison[['Known Acceleration a_x', 'Estimated Acceleration a_x']])
 print(comparison[['Known Acceleration a_y', 'Estimated Acceleration a_y']])
 print(comparison[['Known Acceleration a_z', 'Estimated Acceleration a_z']])
 
-# Note that if results do not respect bounds, assume poor results
 
-print(df["y_" + str(projections-1)])
-
-
-print(b)
-
+print("diff y" + str(y_global[:,0] - result[0][7::3]))
+print("diff z" + str(z_global[:,0] - result[0][8::3]))
 
 ##### END ####
 
